@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",      # Suporte a sessões de usuário
     "django.contrib.messages",      # Sistema de mensagens temporárias (flash messages)
     "django.contrib.staticfiles",   # Gerenciamento de arquivos estáticos (CSS, JS, imagens)
+    "aluno",                        # App para gestão de notas dos alunos
 ]
 
 # Middlewares
