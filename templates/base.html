@@ -1,0 +1,23 @@
+{% load static %}
+<html>
+<head>
+    <!-- CSS globais -->
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'assets/css/seu-estilo.css' %}">
+
+    <!-- Bloco para CSS específico de cada página -->
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    {% block content %}{% endblock %}
+
+    <!-- JS globais -->
+    <script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
+
+    <!-- Bloco para JS específico de cada página -->
+    {% block extra_js %}{% endblock %}
+
+</body>
+</html>
