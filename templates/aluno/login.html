@@ -3,7 +3,7 @@
 <html lang="pt-BR">
 
 <head>
-    <title>Gestão de Egressos OAB - Faculdade Dom Bosco</title>
+    <title>Controle de Notas - Colégio Dom Bosco</title>
 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimal-ui">
@@ -16,108 +16,104 @@
     <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,800" rel="stylesheet">
 
     <!-- CSS -->
-    <link rel="stylesheet" href="{% static 'bower_components/bootstrap/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'assets/icon/themify-icons/themify-icons.css' %}">
     <link rel="stylesheet" href="{% static 'assets/icon/icofont/css/icofont.css' %}">
     <link rel="stylesheet" href="{% static 'assets/css/style.css' %}">
 </head>
 
 <body class="fix-menu">
-
-    <!-- Loader -->
+    <!-- Pre-loader start -->
     <div class="theme-loader">
         <div class="ball-scale">
             <div class='contain'>
-                {% for i in "1234567890" %}
                 <div class="ring"><div class="frame"></div></div>
-                {% endfor %}
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
+                <div class="ring"><div class="frame"></div></div>
             </div>
         </div>
     </div>
 
     <section class="login-block">
+        <!-- Container-fluid starts -->
         <div class="container">
             <div class="row">
                 <div class="col-sm-12">
-
-                    <form class="md-float-material form-material" method="post" action="{% url 'login' %}">
-                        {% csrf_token %}
-
-                        <div class="text-center">
-                            <img src="{% static 'assets/images/logo.png' %}" width="250">
-                        </div>
-
-                        <div class="auth-box card">
-                            <div class="card-block">
-
-                                <div class="row m-b-20">
-                                    <div class="col-md-12">
-                                        <h3 class="text-center">Login</h3>
-                                    </div>
-                                </div>
-
-                                <!-- Mensagens de erro -->
-                                {% if messages %}
-                                    {% for message in messages %}
-                                        <div style="color:red; font-weight:bold; margin-bottom:10px; text-align:center;">
-                                            {{ message }}
-                                        </div>
-                                    {% endfor %}
-                                {% endif %}
-
-                                <div class="form-group form-primary">
-                                    <input type="text" name="email" class="form-control" required placeholder="Seu endereço de email">
-                                    <span class="form-bar"></span>
-                                </div>
-
-                                <div class="form-group form-primary">
-                                    <input type="password" name="password" class="form-control" required placeholder="Senha">
-                                    <span class="form-bar"></span>
-                                </div>
-
-                                <div class="row m-t-25 text-left">
-                                    <div class="col-12">
-                                        <label>
-                                            <input type="checkbox">
-                                            <span class="text-inverse">Lembrar-me</span>
-                                        </label>
-
-                                        <div class="forgot-phone text-right f-right">
-                                            <a href="{% url 'recuperar_senha' %}">Esqueceu sua senha?</a>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="row m-t-30">
-                                    <div class="col-md-12">
-                                        <button type="submit" class="btn btn-primary btn-md btn-block">
-                                            Entrar
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <hr>
-
-                                <div class="row">
-                                    <div class="col-md-10">
-                                        <p>Obrigado.</p>
-                                        <p><a href="{% url 'home' %}"><b>Voltar ao site</b></a></p>
-                                    </div>
-                                </div>
-
+                    <!-- Authentication card start -->
+                    
+                        <form class="md-float-material form-material" action="{% url 'login' %}" method="post">
+                            {% csrf_token %}
+                            <div class="text-center">
+                                <img src="{% static 'assets/images/logo.png' %}" alt="logo.png"width="250">
                             </div>
-                        </div>
-
-                    </form>
-
+                            <div class="auth-box card">
+                                <div class="card-block">
+                                    <div class="row m-b-20">
+                                        <div class="col-md-12">
+                                            <h3 class="text-center">Login</h3>
+                                        </div>
+                                    </div>
+                                    {% if messages %}
+                                        {% for message in messages %}
+                                            <div style="color:red; font-weight:bold; margin-bottom:10px; text-align:center;">
+                                                {{ message }}
+                                            </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                    <div class="form-group form-primary">
+                                        <input type="text" name="username" class="form-control" required placeholder="Usuário">
+                                        <span class="form-bar"></span>
+                                    </div>
+                                    <div class="form-group form-primary">
+                                        <input type="password" name="password" class="form-control" required="" placeholder="Senha">
+                                        <span class="form-bar"></span>
+                                    </div>
+                                    <div class="row m-t-30">
+                                        <div class="col-md-12">
+                                            <button type="submit" class="btn btn-primary btn-md btn-block waves-effect waves-light text-center m-b-20">Entrar</button>
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <div class="row">
+                                        <div class="col-md-10">
+                                            <p class="text-inverse text-left m-b-0">Obrigado.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                        <!-- end of form -->
                 </div>
+                <!-- end of col-sm-12 -->
             </div>
+            <!-- end of row -->
         </div>
+        <!-- end of container-fluid -->
     </section>
 
-    <!-- JS -->
+    <!-- Required Jquery -->
     <script src="{% static 'vendor/jquery/js/jquery.min.js' %}"></script>
+    <script src="{% static 'vendor/jquery-ui/js/jquery-ui.min.js' %}"></script>
+    <script src="{% static 'vendor/popper.js/js/popper.min.js' %}"></script>
     <script src="{% static 'vendor/bootstrap/js/bootstrap.min.js' %}"></script>
+    <!-- jquery slimscroll js -->
+    <script src="{% static 'vendor/jquery-slimscroll/js/jquery.slimscroll.js' %}"></script>
+    <!-- modernizr js -->
+    <script src="{% static 'vendor/modernizr/js/modernizr.js' %}"></script>
+    <script src="{% static 'vendor/modernizr/js/css-scrollbars.js' %}"></script>
+    <!-- i18next.min.js -->
+    <script src="{% static 'vendor/i18next/js/i18next.min.js' %}"></script>
+    <script src="{% static 'vendor/i18next-xhr-backend/js/i18nextXHRBackend.min.js' %}"></script>
+    <script src="{% static 'vendor/i18next-browser-languagedetector/js/i18nextBrowserLanguageDetector.min.js' %}"></script>
+    <script src="{% static 'vendor/jquery-i18next/js/jquery-i18next.min.js' %}"></script>
+    <script src="{% static 'assets/js/common-pages.js' %}"></script>
 
 </body>
 </html>
