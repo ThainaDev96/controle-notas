@@ -51,9 +51,9 @@
                         <form class="md-float-material form-material" action="{% url 'login' %}" method="post">
                             {% csrf_token %}
                             <div class="text-center">
-                                <img src="{% static 'assets/images/logo.png' %}" alt="logo.png"width="250">
+                                <img src="{% static 'assets/images/logo1.png' %}" alt="logo1.png"width="250">
                             </div>
-                            <div class="auth-box card">
+                            <div class="auth-box card" style="margin-top: -10px;">
                                 <div class="card-block">
                                     <div class="row m-b-20">
                                         <div class="col-md-12">
@@ -81,11 +81,11 @@
                                         </div>
                                     </div>
                                     <hr>
-                                    <div class="row">
+                                    <!--<div class="row">
                                         <div class="col-md-10">
                                             <p class="text-inverse text-left m-b-0">Obrigado.</p>
                                         </div>
-                                    </div>
+                                    </div>-->
                                 </div>
                             </div>
                         </form>
@@ -114,6 +114,12 @@
     <script src="{% static 'vendor/i18next-browser-languagedetector/js/i18nextBrowserLanguageDetector.min.js' %}"></script>
     <script src="{% static 'vendor/jquery-i18next/js/jquery-i18next.min.js' %}"></script>
     <script src="{% static 'assets/js/common-pages.js' %}"></script>
-
+<script>
+    window.onload = function() {
+        setTimeout(function() {
+            document.querySelector('.theme-loader').style.display = 'none';
+        }, 1500);
+    }
+</script>
 </body>
 </html>
