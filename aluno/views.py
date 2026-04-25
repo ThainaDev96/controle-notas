@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.shortcuts import render, redirect
-from aluno.models import Disciplina
+from aluno.models import Disciplina, Nota
 
 def login_view(request):
     if request.method == "POST":
@@ -21,3 +21,7 @@ def login_view(request):
 def listar_disciplinas(request):
     disciplinas = Disciplina.objects.filter(ativo=True)
     return render(request, 'aluno/lista.html', {'disciplinas': disciplinas})
+
+def lista_notas(request):
+    notas = Nota.objects.select_related("aluno").all()
+    return render(request, "aluno/lista_notas.html", {"notas": notas})

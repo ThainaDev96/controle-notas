@@ -554,7 +554,7 @@ $(document).ready(function() {
     });
 
     //Função para inicializar a DataTable
-    var table = $('#TabelaListaAlunos').DataTable({
+    var table = $('#TabelaListaAlunos, #TabelaNotas').DataTable({
         //parametro que altera a linguagem para portugues
         language: {
             "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json" // URL do arquivo de tradução
@@ -598,8 +598,8 @@ $(document).ready(function() {
     });
 
     $.extend(true, $.fn.dataTable.defaults, {
-        "searching": false,
-        "ordering": false
+        "searching": true,
+        "ordering": true
     });
 
     $('#setting-default').DataTable();
