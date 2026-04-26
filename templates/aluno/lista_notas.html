@@ -42,6 +42,7 @@
                             <tr>
                                 <th>Matrícula</th>
                                 <th>Nome</th>
+                                <th>Disciplina</th>
                                 <th>P1</th>
                                 <th>P2</th>
                                 <th>T1</th>
@@ -52,56 +53,26 @@
                         </thead>
 
                         <tbody>
-                            {% regroup notas by aluno as lista_alunos %}
+                            {% regroup notas by disciplina as lista_disciplinas %}
+                            {% for grupo_disciplina in lista_disciplinas %}
+                                {% regroup grupo_disciplina.list by aluno as lista_alunos %}
+                                {% for grupo in lista_alunos %}
+                                    <tr>
+                                        <td>{{ grupo.grouper.username }}</td>
+                                        <td>{{ grupo.grouper.get_full_name|default:grupo.grouper.username }}</td>
+                                        <td>{{ grupo_disciplina.grouper.nome }}</td>
 
-                            {% for grupo in lista_alunos %}
-                                <tr>
-                                    <td>{{ grupo.grouper.username }}</td>
-                                    <td>{{ grupo.grouper.get_full_name|default:grupo.grouper.username }}</td>
-
-                                    <td>
-                                        {% for n in grupo.list %}
-                                            {% if n.tipo|lower == "p1" %}
-                                                {{ n.nota }}
-                                            {% endif %}
-                                        {% endfor %}
-                                    </td>
-
-                                    <td>
-                                        {% for n in grupo.list %}
-                                            {% if n.tipo|lower == "p2" %}
-                                                {{ n.nota }}
-                                            {% endif %}
-                                        {% endfor %}
-                                    </td>
-
-                                    <td>
-                                        {% for n in grupo.list %}
-                                            {% if n.tipo|lower == "t1" %}
-                                                {{ n.nota }}
-                                            {% endif %}
-                                        {% endfor %}
-                                    </td>
-
-                                    <td>
-                                        {% for n in grupo.list %}
-                                            {% if n.tipo|lower == "t2" %}
-                                                {{ n.nota }}
-                                            {% endif %}
-                                        {% endfor %}
-                                    </td>
-
-                                    <td>
-                                        {{ grupo.list.0.media_final|default:"-" }}
-                                    </td>
-
-                                    <td>
-                                        {{ grupo.list.0.situacao|default:"-" }}
-                                    </td>
-                                </tr>
+                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "p1" %}{{ n.nota }}{% endif %}{% endfor %}</td>
+                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "p2" %}{{ n.nota }}{% endif %}{% endfor %}</td>
+                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "t1" %}{{ n.nota }}{% endif %}{% endfor %}</td>
+                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "t2" %}{{ n.nota }}{% endif %}{% endfor %}</td>
+                                        <td>{{ grupo.list.0.media_final|default:"-" }}</td>
+                                        <td>{{ grupo.list.0.situacao|default:"-" }}</td>
+                                    </tr>
+                                {% endfor %}
                             {% empty %}
                                 <tr>
-                                    <td colspan="8">Nenhuma nota encontrada</td>
+                                    <td colspan="9">Nenhuma nota encontrada</td>
                                 </tr>
                             {% endfor %}
                         </tbody>

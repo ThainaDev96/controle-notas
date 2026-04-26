@@ -9,6 +9,9 @@ class Disciplina(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
+    def __str__(self):
+        return self.nome
+
 
 class Turma(models.Model):
     nome = models.CharField(max_length=50, verbose_name="Nome")
@@ -18,6 +21,9 @@ class Turma(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
+    def __str__(self):
+        return self.nome
+
 
 class Matricula(models.Model):
     aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
@@ -25,6 +31,9 @@ class Matricula(models.Model):
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    def __str__(self):
+        return self.aluno
 
 
 class Nota(models.Model):
@@ -41,8 +50,11 @@ class Nota(models.Model):
         ("p2", "P2"),
         ("t1", "T1"),
         ("t2", "T2"),
-    ], verbose_name="Situação")
+    ], verbose_name="Tipo")
     media_final = models.FloatField(verbose_name="Média Final")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    def __str__(self):
+        return self.aluno
