@@ -32,8 +32,8 @@ class Matricula(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
-    def __str__(self):
-        return self.aluno
+    # def __str__(self):
+    #     return self.aluno
 
 
 class Nota(models.Model):
@@ -44,17 +44,14 @@ class Nota(models.Model):
         ("recuperacao", "Em recuperação"),
         ("reprovado", "Reprovado"),
     ], verbose_name="Situação")
-    nota = models.FloatField(verbose_name="Nota")
-    tipo = models.CharField(choices=[
-        ("p1", "P1"),
-        ("p2", "P2"),
-        ("t1", "T1"),
-        ("t2", "T2"),
-    ], verbose_name="Tipo")
+    nota_p1 = models.FloatField(verbose_name="P1", null=True)
+    nota_p2 = models.FloatField(verbose_name="P2", null=True)
+    nota_t1 = models.FloatField(verbose_name="T1", null=True)
+    nota_t2 = models.FloatField(verbose_name="T2", null=True)
     media_final = models.FloatField(verbose_name="Média Final")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
-    def __str__(self):
-        return self.aluno
+    # def __str__(self):
+    #     return self.aluno

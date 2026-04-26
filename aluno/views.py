@@ -1,6 +1,6 @@
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from aluno.models import Disciplina, Nota
 
 def login_view(request):
@@ -23,5 +23,16 @@ def listar_disciplinas(request):
     return render(request, 'aluno/lista.html', {'disciplinas': disciplinas})
 
 def lista_notas(request):
-    notas = Nota.objects.select_related("aluno").all()
+    notas = Nota.objects.filter(ativo=True)
     return render(request, "aluno/lista_notas.html", {"notas": notas})
+
+def deletar_nota(request, id):
+    nota = get_object_or_404(Nota, id=id)
+    nota.delete()
+    messages.success(request, "Nota deletada com sucesso!")
+    return redirect("lista-notas")
+
+def editar_nota(request, id):
+    nota = get_object_or_404(Nota, id=id)
+    # em breve
+    return redirect("lista-notas")

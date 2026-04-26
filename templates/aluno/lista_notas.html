@@ -49,27 +49,31 @@
                                 <th>T2</th>
                                 <th>MF</th>
                                 <th>Situação</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            {% regroup notas by disciplina as lista_disciplinas %}
-                            {% for grupo_disciplina in lista_disciplinas %}
-                                {% regroup grupo_disciplina.list by aluno as lista_alunos %}
-                                {% for grupo in lista_alunos %}
-                                    <tr>
-                                        <td>{{ grupo.grouper.username }}</td>
-                                        <td>{{ grupo.grouper.get_full_name|default:grupo.grouper.username }}</td>
-                                        <td>{{ grupo_disciplina.grouper.nome }}</td>
-
-                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "p1" %}{{ n.nota }}{% endif %}{% endfor %}</td>
-                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "p2" %}{{ n.nota }}{% endif %}{% endfor %}</td>
-                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "t1" %}{{ n.nota }}{% endif %}{% endfor %}</td>
-                                        <td>{% for n in grupo.list %}{% if n.tipo|lower == "t2" %}{{ n.nota }}{% endif %}{% endfor %}</td>
-                                        <td>{{ grupo.list.0.media_final|default:"-" }}</td>
-                                        <td>{{ grupo.list.0.situacao|default:"-" }}</td>
-                                    </tr>
-                                {% endfor %}
+                            {% for nota in notas %}
+                                <tr>
+                                    <td>{{ nota.aluno.username }}</td>
+                                    <td>{{ nota.aluno.first_name }}</td>
+                                    <td>{{ nota.disciplina }}</td>
+                                    <td>{{ nota.nota_p1|default:"-" }}</td>
+                                    <td>{{ nota.nota_p2|default:"-" }}</td>
+                                    <td>{{ nota.nota_t1|default:"-" }}</td>
+                                    <td>{{ nota.nota_t2|default:"-" }}</td>
+                                    <td>{{ nota.media_final|default:"-" }}</td>
+                                    <td>{{ nota.situacao|default:"-" }}</td>
+                                    <td>
+                                        <a href="" class="btn btn-out btn-danger btn-square">
+                                            <i class="ti-trash"></i>
+                                        </a>
+                                        <a href="" class="btn btn-out btn-primary btn-square">
+                                            <i class="ti-pencil"></i>
+                                        </a>
+                                    </td>
+                                </tr>
                             {% empty %}
                                 <tr>
                                     <td colspan="9">Nenhuma nota encontrada</td>

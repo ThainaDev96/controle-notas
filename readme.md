@@ -137,3 +137,10 @@ docker-compose exec web python manage.py shell
 # Cria um novo app com o nome definido
 docker-compose exec web python manage.py startapp aluno
 ```
+
+## Executando testes e populando o banco
+
+Para simular os registros, foi criado uma função que lê os dados de um arquivo CSV e cria os usuários no banco. Para executá-la, é necessário utilizado o seguinte comando:
+```
+docker compose exec web python3 manage.py popular_dados
+```
