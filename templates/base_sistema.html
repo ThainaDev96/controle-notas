@@ -52,7 +52,7 @@
                             <i class="feather icon-menu"></i>
                         </a>
                         <a href="#">
-                            <img class="img-fluid" src="{% static 'assets/images/logo_horizontal_transparente.png' %}" alt="Logo" width="180">
+                            <img class="img-fluid" src="{% static 'assets/images/logo_final.png' %}" alt="Logo" width="180">
                         </a>
                         <a class="mobile-options">
                             <i class="feather icon-more-horizontal"></i>
@@ -104,16 +104,28 @@
 
                             <!-- MENU PROFESSOR -->
                             {% if request.user.groups.all.0.name == 'professor' or request.user.is_staff %}
-                            <div class="pcoded-navigatio-lavel">Alunos</div>
+                            <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
-                                <li class="{% block nav_lista_notas %}{% endblock %}">
-                                    <a href="{% url 'lista-notas' %}">
-                                        <span class="pcoded-micon"><i class="feather icon-list"></i></span>
-                                        <span class="pcoded-mtext">Lista de Notas</span>
+                                <li class="pcoded-hasmenu {% block nav_notas_menu %}{% endblock %}">
+                                    <a href="javascript:void(0)">
+                                        <span class="pcoded-micon"><i class="feather icon-box"></i></span>
+                                        <span class="pcoded-mtext">Alunos</span>
                                     </a>
+                                    <ul class="pcoded-submenu">
+                                        <li class="{% block nav_lista_notas %}{% endblock %}">
+                                            <a href="{% url 'lista-notas' %}">
+                                                <span class="pcoded-mtext">Listar</span>
+                                            </a>
+                                        </li>
+                                        <li class="{% block nav_cadastrar_notas %}{% endblock %}">
+                                            <a href="{% url 'cadastrar-notas' %}">
+                                                <span class="pcoded-mtext">Cadastrar</span>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </li>
                             </ul>
-                            {% endif %}
+                            {% endif %} 
 
                             <!-- MENU ALUNO -->
                             {% if request.user.groups.all.0.name == 'aluno' %}
