@@ -41,14 +41,24 @@ def editar_nota(request, id):
 
 def cadastrar_notas(request):
     if request.method == 'POST':
-        aluno_id     = request.POST.get('aluno')
+        aluno_id      = request.POST.get('aluno')
         disciplina_id = request.POST.get('disciplina')
-        nota_p1      = request.POST.get('nota_p1') or None
-        nota_p2      = request.POST.get('nota_p2') or None
-        nota_t1      = request.POST.get('nota_t1') or None
-        nota_t2      = request.POST.get('nota_t2') or None
-        media_final  = request.POST.get('media_final')
-        situacao     = request.POST.get('situacao')
+        nota_p1       = request.POST.get('nota_p1') or None
+        nota_p2       = request.POST.get('nota_p2') or None
+        nota_t1       = request.POST.get('nota_t1') or None
+        nota_t2       = request.POST.get('nota_t2') or None
+
+        # Calcula a média no backend (regra de negócio real)
+        notas = [float(n) for n in [nota_p1, nota_p2, nota_t1, nota_t2] if n]
+        media_final = round(sum(notas) / len(notas), 2) if notas else 0
+
+        # Situação automática pela média
+        if media_final >= 7:
+            situacao = 'aprovado'
+        elif media_final >= 5:
+            situacao = 'recuperacao'
+        else:
+            situacao = 'reprovado'
 
         Nota.objects.create(
             aluno_id=aluno_id,
@@ -64,10 +74,9 @@ def cadastrar_notas(request):
         return redirect('lista-notas')
 
     alunos = User.objects.filter(groups__name='aluno')
-    disciplinas = Disciplina.objects.filter(professor=request.user, ativo=True)
+    disciplinas = Disciplina.objects.filter(ativo=True)
 
     return render(request, 'aluno/cadastrar_notas.html', {
         'alunos': alunos,
         'disciplinas': disciplinas,
-        'nota': None,  # None = modo cadastro (não edição)
     })

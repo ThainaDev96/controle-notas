@@ -125,12 +125,9 @@
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Situação</label>
                         <div class="col-sm-10">
-                            <select name="situacao" id="situacao" class="form-control" required>
-                                <option value="">Selecione</option>
-                                <option value="aprovado">Aprovado</option>
-                                <option value="recuperacao">Em recuperação</option>
-                                <option value="reprovado">Reprovado</option>
-                            </select>
+                            <input type="text" class="form-control" id="situacao"
+                            placeholder="Definida automaticamente" readonly
+                            style="background-color: #f4f7fa;">
                         </div>
                     </div>
 
@@ -170,7 +167,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         if (count > 0) {
-            const media = (soma / count).toFixed(2);
+            const media = (soma / count).toFixed(2)
             mediaInput.value = media;
 
             if (media >= 7.0) {
@@ -187,7 +184,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     campos.forEach(function (campo) {
-        campo.addEventListener('input', calcularMedia);
+        campo.addEventListener('input', function () {
+            if (parseFloat(this.value) > 10 || parseFloat(this.value) < 0) {
+            this.value = '';
+        }
+    calcularMedia();
+        campo.addEventListener('blur', function () {
+            if (this.value !== '') {
+            this.value = parseFloat(this.value).toFixed(1);
+        }
+    });
+    });
     });
 });
 </script>
