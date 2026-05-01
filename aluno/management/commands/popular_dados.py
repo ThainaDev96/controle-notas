@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
-from aluno.models import Disciplina, Nota
+from aluno.models import Disciplina, Nota, Turma
 import random
 import csv
 import os
@@ -21,11 +21,13 @@ def gerar_senha(tamanho=12):
 
 class Command(BaseCommand):
     help = "Popula o banco com dados de teste"
-
+    #chama métodos
     def handle(self, *args, **kwargs):
         self.popular_usuarios()
         self.popular_disciplinas()
+        self.popular_turmas()
         self.popular_notas()
+        
 
     def popular_usuarios(self):
         with open("/app/aluno/arquivos/alunos_exemplo.csv", newline='', encoding='utf-8') as file:
@@ -86,18 +88,35 @@ class Command(BaseCommand):
                     professor=professor
                 )
 
+    def popular_turmas(self):
+        nome_turma = ["1A", "1B", "2A", "2B", "3A"]
+
+        alunos = list(User.objects.filter(is_staff=False))
+        disciplinas = list(Disciplina.objects.all())
+
+        alunos_por_turma = len(alunos) // len(nome_turma)
+
+        for i, nome in enumerate(nome_turma):
+            inicio = i * alunos_por_turma
+            fim = inicio + alunos_por_turma if i < len(nome_turma) - 1 else len(alunos)
+            alunos_da_turma = alunos[inicio:fim]
+
+            for disciplina in disciplinas:
+                turma, _ = Turma.objects.get_or_create(nome=nome, disciplina=disciplina)
+                turma.alunos.set(alunos_da_turma)  # vincula os alunos à turma
+
     def popular_notas(self):
         disciplinas = Disciplina.objects.all()
         alunos = User.objects.all()
 
         for aluno in alunos:
             for disciplina in disciplinas:
-                p1 = round(random.uniform(0, 2), 1)
-                t1 = round(random.uniform(0, 2), 1)
-                p2 = round(random.uniform(0, 3), 1)
-                t2 = round(random.uniform(0, 3), 1)
+                p1 = round(random.uniform(0, 10), 1)
+                t1 = round(random.uniform(0, 10), 1)
+                p2 = round(random.uniform(0, 10), 1)
+                t2 = round(random.uniform(0, 10), 1)
 
-                media = round(p1 + t1 + p2 + t2, 1)
+                media = round((p1 + t1 + p2 + t2) / 4, 2)
 
                 if media >= 7:
                     situacao = "aprovado"
