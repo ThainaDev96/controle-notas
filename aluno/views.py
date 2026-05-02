@@ -28,7 +28,27 @@ def listar_disciplinas(request):
 
 def lista_notas(request):
     notas = Nota.objects.filter(ativo=True)
-    return render(request, "aluno/lista_notas.html", {"notas": notas})
+
+    turma_nome    = request.POST.get('turma', '')
+    disciplina_id = request.POST.get('disciplina', '')
+
+    if turma_nome:
+        alunos_da_turma = User.objects.filter(turmas__nome=turma_nome)
+        notas = notas.filter(aluno__in=alunos_da_turma)
+
+    if disciplina_id:
+        notas = notas.filter(disciplina_id=disciplina_id)
+
+    turmas      = Turma.objects.filter(ativo=True).values_list('nome', flat=True).distinct()
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "aluno/lista_notas.html", {
+        "notas":                  notas,
+        "turmas":                 turmas,
+        "disciplinas":            disciplinas,
+        "turma_selecionada":      turma_nome,
+        "disciplina_selecionada": disciplina_id,
+    })
 
 def deletar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
@@ -93,5 +113,18 @@ def alunos_por_turma(request):
     turma = get_object_or_404(Turma, id=turma_id)
     alunos = turma.alunos.all().values('id', 'first_name', 'username')
     return JsonResponse({'alunos': list(alunos)})
+
+def disciplinas_por_turma(request):
+    turma_nome = request.GET.get('turma')
+    if not turma_nome:
+        return JsonResponse({'disciplinas': []})
+
+    disciplinas = Disciplina.objects.filter(
+        turma__nome=turma_nome,
+        turma__ativo=True,
+        ativo=True
+    ).distinct().values('id', 'nome')
+
+    return JsonResponse({'disciplinas': list(disciplinas)})
     
     
