@@ -64,7 +64,7 @@
                             <li class="user-profile header-notification">
                                 <div class="dropdown-primary dropdown">
                                     <div class="dropdown-toggle" data-toggle="dropdown">
-                                        <img src="{% static 'assets/images/avatar-1.jpg' %}" class="img-radius" alt="Foto do usuário">
+                                        <img src="{% static 'assets/images/download.png' %}" class="img-radius" alt="Foto do usuário">
                                         <span>
                                             {% if request.user.groups.all.0.name == 'aluno' %}
                                                 Aluno
@@ -132,7 +132,7 @@
                             <div class="pcoded-navigatio-lavel">Minhas Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_minhas_notas %}{% endblock %}">
-                                    <a href="#">
+                                    <a href="{% url 'minhas-notas' %}">
                                         <span class="pcoded-micon"><i class="feather icon-book"></i></span>
                                         <span class="pcoded-mtext">Ver Notas</span>
                                     </a>
