@@ -29,4 +29,5 @@ urlpatterns = [
     path("nota/editar/<int:id>/", views.editar_nota, name="editar-nota"),
     path("nota/deletar/<int:id>/", views.deletar_nota, name="deletar-nota"),
     path('notas/cadastrar/', views.cadastrar_notas, name='cadastrar-notas'), 
+    path('alunos-por-turma/', views.alunos_por_turma, name='alunos-por-turma'), 
 ]

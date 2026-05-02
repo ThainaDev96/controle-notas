@@ -1,8 +1,10 @@
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
-from aluno.models import Disciplina, Nota
+from aluno.models import Disciplina, Nota, Turma
 from django.contrib.auth.models import User
+from django.http import JsonResponse
+from django.db.models import Min
 
 
 def login_view(request):
@@ -73,10 +75,23 @@ def cadastrar_notas(request):
         messages.success(request, 'Nota cadastrada com sucesso!')
         return redirect('lista-notas')
 
-    alunos = User.objects.filter(groups__name='aluno')
+    turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
+    alunos = User.objects.filter(is_staff=False) 
     disciplinas = Disciplina.objects.filter(ativo=True)
 
     return render(request, 'aluno/cadastrar_notas.html', {
+        'turmas': turmas,
         'alunos': alunos,
         'disciplinas': disciplinas,
     })
+
+def alunos_por_turma(request):
+    turma_id = request.GET.get('turma_id')
+    if not turma_id:
+        return JsonResponse({'alunos': []})
+    
+    turma = get_object_or_404(Turma, id=turma_id)
+    alunos = turma.alunos.all().values('id', 'first_name', 'username')
+    return JsonResponse({'alunos': list(alunos)})
+    
+    

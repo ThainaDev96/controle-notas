@@ -34,18 +34,24 @@
             <div class="card-block">
                 <form method="post" action="">
                     {% csrf_token %}
-
+                    <!-- TURMA -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Turma</label>
+                        <div class="col-sm-10">
+                            <select id="turma" class="form-control">
+                                <option value="">Selecione a turma</option>
+                                {% for turma in turmas %}
+                                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
                     <!-- ALUNO -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Aluno</label>
                         <div class="col-sm-10">
-                            <select name="aluno" class="form-control" required>
-                                <option value="">Selecione</option>
-                                {% for aluno in alunos %}
-                                    <option value="{{ aluno.id }}">
-                                        {{ aluno.get_full_name|default:aluno.username }}
-                                    </option>
-                                {% endfor %}
+                            <select name="aluno" id="aluno" class="form-control" required>
+                                <option value="">Selecione primeiro a turma</option>
                             </select>
                         </div>
                     </div>
@@ -196,6 +202,26 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     });
     });
+});
+
+document.getElementById('turma').addEventListener('change', function () {
+    const turmaId = this.value;
+    const alunoSelect = document.getElementById('aluno');
+
+    if (!turmaId) {
+        alunoSelect.innerHTML = '<option value="">Selecione primeiro a turma</option>';
+        return;
+    }
+
+    fetch(`/alunos-por-turma/?turma_id=${turmaId}`)
+        .then(res => res.json())
+        .then(data => {
+            alunoSelect.innerHTML = '<option value="">Selecione o aluno</option>';
+            data.alunos.forEach(aluno => {
+                const nome = aluno.first_name || aluno.username;
+                alunoSelect.innerHTML += `<option value="${aluno.id}">${nome} (${aluno.username})</option>`;
+            });
+        });
 });
 </script>
 {% endblock %}
