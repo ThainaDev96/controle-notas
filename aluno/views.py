@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
-from aluno.models import Disciplina, Nota, Turma
+from aluno.models import Disciplina, Nota, Turma, Matricula
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.db.models import Min
@@ -58,8 +58,30 @@ def deletar_nota(request, id):
 
 def editar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
-    # em breve
-    return redirect("lista-notas")
+    
+    if request.method == "POST":
+        nota.aluno_id = request.POST.get("aluno")
+        nota.disciplina_id = request.POST.get("disciplina")
+        nota.nota_p1 = request.POST.get("nota_p1")
+        nota.nota_p2 = request.POST.get("nota_p2")
+        nota.nota_t1 = request.POST.get("nota_t1")
+        nota.nota_t2 = request.POST.get("nota_t2")
+        nota.media_final = request.POST.get("media_final")
+        nota.save()
+        return redirect("lista-notas")
+
+    matricula = Matricula.objects.filter(aluno=nota.aluno).first()
+    turma_do_aluno = matricula.turma if matricula else None
+
+    turmas = Turma.objects.all()
+    disciplinas = Disciplina.objects.all()
+    return render(request, "aluno/cadastrar_notas.html", {
+        "turmas": turmas,
+        "disciplinas": disciplinas,
+        "nota": nota,
+        "editando": True,
+        "turma_do_aluno": turma_do_aluno
+    })
 
 def cadastrar_notas(request):
     if request.method == 'POST':

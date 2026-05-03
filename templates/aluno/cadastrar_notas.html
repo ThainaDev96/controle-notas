@@ -1,7 +1,13 @@
 {% extends 'base_sistema.html' %}
 {% load static %}
 
-{% block title %}Cadastrar Notas{% endblock %}
+{% block title %}
+    {% if editando %}
+        Editar Nota
+    {% else %}
+        Cadastrar Notas
+    {% endif %}
+{% endblock %}
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
 {% block nav_cadastrar_notas %}active{% endblock %}
 
@@ -13,7 +19,11 @@
         <div class="col-lg-8">
             <div class="page-header-title">
                 <div class="d-inline">
-                    <h4>Cadastro de Notas</h4>
+                    {% if editando %}
+                        <h4>Edição de Notas</h4>
+                    {% else %}
+                        <h4>Cadastro de Notas</h4>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -25,23 +35,32 @@
     <div class="col-sm-12">
         <div class="card">
             <div class="card-header">
-                <h5>Cadastrar Notas</h5>
+                {% if editando %}
+                    <h5>Editar Notas</h5>
+                {% else %}
+                    <h5>Cadastrar Notas</h5>
+                {% endif %}
                 <div class="card-header-right">
                     <i class="icofont icofont-spinner-alt-5"></i>
                 </div>
             </div>
 
             <div class="card-block">
-                <form method="post" action="">
+                <form method="post" action="{% if editando %}{% url 'editar-nota' nota.pk %}{% else %}{% url 'cadastrar-notas' %}{% endif %}">
                     {% csrf_token %}
                     <!-- TURMA -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Turma</label>
                         <div class="col-sm-10">
-                            <select id="turma" class="form-control">
+                            <select id="turma" class="form-control"
+                                data-turma-selecionada="{% if editando %}{{ turma_do_aluno.id }}{% endif %}"
+                                data-aluno-selecionado="{% if editando %}{{ nota.aluno.id }}{% endif %}">
                                 <option value="">Selecione a turma</option>
                                 {% for turma in turmas %}
-                                    <option value="{{ turma.id }}">{{ turma.nome }}</option>
+                                    <option value="{{ turma.id }}"
+                                        {% if editando and turma_do_aluno.id == turma.id %}selected{% endif %}>
+                                        {{ turma.nome }}
+                                    </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -51,7 +70,12 @@
                         <label class="col-sm-2 col-form-label">Aluno</label>
                         <div class="col-sm-10">
                             <select name="aluno" id="aluno" class="form-control" required>
-                                <option value="">Selecione primeiro a turma</option>
+                                {% if editando %}
+                                    <!-- Opção do aluno atual já carregada, o JS completa o resto -->
+                                    <option value="{{ nota.aluno.id }}" selected>{{ nota.aluno.first_name }}</option>
+                                {% else %}
+                                    <option value="">Selecione primeiro a turma</option>
+                                {% endif %}
                             </select>
                         </div>
                     </div>
@@ -63,7 +87,10 @@
                             <select name="disciplina" class="form-control" required>
                                 <option value="">Selecione</option>
                                 {% for disciplina in disciplinas %}
-                                    <option value="{{ disciplina.id }}">{{ disciplina.nome }}</option>
+                                    <option value="{{ disciplina.id }}"
+                                        {% if editando and nota.disciplina.id == disciplina.id %}selected{% endif %}>
+                                        {{ disciplina.nome }}
+                                    </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -76,6 +103,7 @@
                             <input type="number" step="0.1" min="0" max="10"
                                 class="form-control nota-campo"
                                 name="nota_p1"
+                                value="{{ nota.nota_p1|floatformat:1 }}"
                                 placeholder="0.0 – 10.0">
                         </div>
                     </div>
@@ -87,6 +115,7 @@
                             <input type="number" step="0.1" min="0" max="10"
                                 class="form-control nota-campo"
                                 name="nota_p2"
+                                value="{{ nota.nota_p2|floatformat:1 }}"
                                 placeholder="0.0 – 10.0">
                         </div>
                     </div>
@@ -98,6 +127,7 @@
                             <input type="number" step="0.1" min="0" max="10"
                                 class="form-control nota-campo"
                                 name="nota_t1"
+                                value="{{ nota.nota_t1|floatformat:1 }}"
                                 placeholder="0.0 – 10.0">
                         </div>
                     </div>
@@ -109,6 +139,7 @@
                             <input type="number" step="0.1" min="0" max="10"
                                 class="form-control nota-campo"
                                 name="nota_t2"
+                                value="{{ nota.nota_t2|floatformat:1 }}"
                                 placeholder="0.0 – 10.0">
                         </div>
                     </div>
@@ -121,6 +152,7 @@
                                 class="form-control"
                                 id="media_final"
                                 name="media_final"
+                                value="{{ nota.media_final|floatformat:1 }}"
                                 placeholder="Calculada automaticamente"
                                 readonly
                                 style="background-color: #f4f7fa;">
@@ -195,11 +227,12 @@ document.addEventListener("DOMContentLoaded", function () {
             this.value = '';
         }
     calcularMedia();
+        campo.addEventListener('input', calcularMedia);
         campo.addEventListener('blur', function () {
             if (this.value !== '') {
-            this.value = parseFloat(this.value).toFixed(1);
-        }
-    });
+                this.value = parseFloat(this.value).toFixed(1);
+            }
+        });
     });
     });
 });

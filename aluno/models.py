@@ -22,7 +22,7 @@ class Turma(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
     def __str__(self):
-        return self.nome
+        return f"{self.nome} - {self.disciplina.nome}"
 
 
 class Matricula(models.Model):
