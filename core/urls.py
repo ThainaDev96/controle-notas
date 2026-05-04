@@ -31,4 +31,5 @@ urlpatterns = [
     path('notas/cadastrar/', views.cadastrar_notas, name='cadastrar-notas'), 
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos-por-turma'),
     path('disciplinas-por-turma/', views.disciplinas_por_turma, name='disciplinas-por-turma'), 
+    path('boletim-aluno/', views.boletim_aluno, name='minhas-notas')
 ]

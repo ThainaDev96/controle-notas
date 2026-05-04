@@ -98,12 +98,11 @@
                     <nav class="pcoded-navbar">
                         <div class="pcoded-inner-navbar main-menu">
 
+                            <!-- MENU PROFESSOR -->
+                            {% if request.user.groups.all.0.name == 'professor' %}
                             <div class="pcoded-navigatio-lavel">
                                 Olá, Professor {{ request.user.first_name }}
                             </div>
-
-                            <!-- MENU PROFESSOR -->
-                            {% if request.user.groups.all.0.name == 'professor' or request.user.is_staff %}
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="pcoded-hasmenu {% block nav_notas_menu %}{% endblock %}">
@@ -129,6 +128,9 @@
 
                             <!-- MENU ALUNO -->
                             {% if request.user.groups.all.0.name == 'aluno' %}
+                            <div class="pcoded-navigatio-lavel">
+                                Olá, Aluno(a) {{ request.user.first_name }}
+                            </div>
                             <div class="pcoded-navigatio-lavel">Minhas Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_minhas_notas %}{% endblock %}">
@@ -197,10 +199,10 @@
             const alertBox = document.querySelector(".alert-auto-hide");
             if (alertBox) {
                 setTimeout(() => {
-                    alertBox.style.transition = "opacity 0.5s";
+                    alertBox.style.transition = "opacity 0.8s";
                     alertBox.style.opacity = "0";
-                    setTimeout(() => alertBox.remove(), 600);
-                }, 2000);
+                    setTimeout(() => alertBox.remove(), 900);
+                }, 120000);
             }
         });
     </script>

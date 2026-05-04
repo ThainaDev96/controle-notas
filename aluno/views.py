@@ -50,10 +50,37 @@ def lista_notas(request):
         "disciplina_selecionada": disciplina_id,
     })
 
+def boletim_aluno(request):
+
+    # request.user.id
+
+    notas = Nota.objects.filter(ativo=True)
+
+    turma_nome    = request.POST.get('turma', '')
+    disciplina_id = request.POST.get('disciplina', '')
+
+    if turma_nome:
+        alunos_da_turma = User.objects.filter(turmas__nome=turma_nome)
+        notas = notas.filter(aluno__in=alunos_da_turma)
+
+    if disciplina_id:
+        notas = notas.filter(disciplina_id=disciplina_id)
+
+    turmas      = Turma.objects.filter(ativo=True).values_list('nome', flat=True).distinct()
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "aluno/minhas_notas.html", {
+        "notas":                  notas,
+        "turmas":                 turmas,
+        "disciplinas":            disciplinas,
+        "turma_selecionada":      turma_nome,
+        "disciplina_selecionada": disciplina_id,
+    })
+
 def deletar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
     nota.delete()
-    messages.success(request, "Nota deletada com sucesso!")
+    messages.error(request, "Nota deletada com sucesso!")
     return redirect("lista-notas")
 
 def editar_nota(request, id):
