@@ -52,7 +52,7 @@
                             <i class="feather icon-menu"></i>
                         </a>
                         <a href="#">
-                            <img class="img-fluid" src="{% static 'assets/images/logo_final.png' %}" alt="Logo" width="180">
+                            <img class="img-fluid" src="{% static 'assets/images/logo_menu.png' %}" alt="Logo" width="180">
                         </a>
                         <a class="mobile-options">
                             <i class="feather icon-more-horizontal"></i>
@@ -129,14 +129,14 @@
                             <!-- MENU ALUNO -->
                             {% if request.user.groups.all.0.name == 'aluno' %}
                             <div class="pcoded-navigatio-lavel">
-                                Olá, Aluno(a) {{ request.user.first_name }}
+                                Olá, Aluno(a)
                             </div>
                             <div class="pcoded-navigatio-lavel">Minhas Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_minhas_notas %}{% endblock %}">
                                     <a href="{% url 'minhas-notas' %}">
                                         <span class="pcoded-micon"><i class="feather icon-book"></i></span>
-                                        <span class="pcoded-mtext">Ver Notas</span>
+                                        <span class="pcoded-mtext">Boletim</span>
                                     </a>
                                 </li>
                             </ul>
