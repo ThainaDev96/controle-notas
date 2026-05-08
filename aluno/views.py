@@ -54,27 +54,25 @@ def boletim_aluno(request):
 
     # request.user.id
 
-    notas = Nota.objects.filter(ativo=True)
+    notas = Nota.objects.filter(ativo=True, aluno=request.user)
 
-    turma_nome    = request.POST.get('turma', '')
     disciplina_id = request.POST.get('disciplina', '')
-
-    if turma_nome:
-        alunos_da_turma = User.objects.filter(turmas__nome=turma_nome)
-        notas = notas.filter(aluno__in=alunos_da_turma)
+    situacao_selecionada = request.POST.get('situacao', '')
 
     if disciplina_id:
         notas = notas.filter(disciplina_id=disciplina_id)
 
-    turmas      = Turma.objects.filter(ativo=True).values_list('nome', flat=True).distinct()
-    disciplinas = Disciplina.objects.filter(ativo=True)
+    if situacao_selecionada: 
+        notas = notas.filter(situacao=situacao_selecionada)
+
+    
+    disciplinas = Disciplina.objects.filter(nota__aluno=request.user, ativo=True).distinct()
 
     return render(request, "aluno/minhas_notas.html", {
         "notas":                  notas,
-        "turmas":                 turmas,
         "disciplinas":            disciplinas,
-        "turma_selecionada":      turma_nome,
         "disciplina_selecionada": disciplina_id,
+        "situacao_selecionada": situacao_selecionada,
     })
 
 def deletar_nota(request, id):
