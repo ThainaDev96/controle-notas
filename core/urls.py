@@ -20,11 +20,11 @@ from django.urls import path
 from aluno import views
 
 
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('disciplinas/', views.listar_disciplinas, name='disciplina-lista'),
     path('login/', views.login_view, name='login'),
+    path("logout/", views.logout_view, name="logout"),
     path("lista-notas/", views.lista_notas, name="lista-notas"),
     path("nota/editar/<int:id>/", views.editar_nota, name="editar-nota"),
     path("nota/deletar/<int:id>/", views.deletar_nota, name="deletar-nota"),

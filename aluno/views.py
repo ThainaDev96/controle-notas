@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from aluno.models import Disciplina, Nota, Turma, Matricula
@@ -15,12 +15,23 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
-            return redirect("admin:index")
+
+            if user.is_superuser:
+                return redirect("admin:index")
+
+            grupos = user.groups.values_list("name", flat=True)
+            if "professor" in grupos:
+                return render(request, "aluno/lista_notas.html")
+
+            return render(request, "aluno/minhas_notas.html")
 
         messages.error(request, "Usuário ou senha inválidos")
 
     return render(request, "aluno/login.html")
 
+def logout_view(request):
+    logout(request)
+    return render(request, "aluno/login.html")
 
 def listar_disciplinas(request):
     disciplinas = Disciplina.objects.filter(ativo=True)
