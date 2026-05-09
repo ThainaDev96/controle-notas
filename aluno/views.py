@@ -23,7 +23,7 @@ def login_view(request):
             if "professor" in grupos:
                 return redirect("lista-notas")
 
-            return redirect("boletim-aluno")
+            return redirect("minhas-notas")
 
         messages.error(request, "Usuário ou senha inválidos")
 
