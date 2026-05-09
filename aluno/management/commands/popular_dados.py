@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
-from aluno.models import Disciplina, Nota, Turma
+from django.contrib.auth.models import User, Group
+from aluno.models import Disciplina, Nota, Turma, Matricula
 import random
 import csv
 import os
@@ -26,6 +26,7 @@ class Command(BaseCommand):
         self.popular_usuarios()
         self.popular_disciplinas()
         self.popular_turmas()
+        self.popular_matriculas()
         self.popular_notas()
         
 
@@ -105,6 +106,20 @@ class Command(BaseCommand):
                 turma, _ = Turma.objects.get_or_create(nome=nome, disciplina=disciplina)
                 turma.alunos.set(alunos_da_turma)  # vincula os alunos à turma
 
+    def popular_matriculas(self):
+        # Todos os usuários que NÃO são professores e não são superuser
+        grupo_professor = Group.objects.get(name="professor")
+        alunos = User.objects.exclude(groups=grupo_professor).exclude(is_superuser=True)
+
+        turmas = Turma.objects.filter(ativo=True)
+
+        for aluno in alunos:
+            for turma in turmas:
+                turma, criado = Matricula.objects.get_or_create(
+                    aluno=aluno,
+                    turma=turma,
+                )
+    
     def popular_notas(self):
         disciplinas = Disciplina.objects.all()
         alunos = User.objects.all()
