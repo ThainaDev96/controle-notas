@@ -21,9 +21,9 @@ def login_view(request):
 
             grupos = user.groups.values_list("name", flat=True)
             if "professor" in grupos:
-                return render(request, "aluno/lista_notas.html")
+                return redirect("lista-notas")
 
-            return render(request, "aluno/minhas_notas.html")
+            return redirect("boletim-aluno")
 
         messages.error(request, "Usuário ou senha inválidos")
 
