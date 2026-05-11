@@ -92,7 +92,7 @@
         <div class="card">
 
             <div class="card-header">
-                <h5>Notas dos Alunos</h5>
+                <h5>Boletim</h5>
                 <div class="card-header-right">
                     <i class="icofont icofont-spinner-alt-5"></i>
                 </div>
@@ -122,7 +122,8 @@
                                     <td>{{ nota.nota_t1|default:"-" }}</td>
                                     <td>{{ nota.nota_t2|default:"-" }}</td>
                                     <td>{{ nota.media_final|default:"-" }}</td>
-                                    <td>{{ nota.situacao|default:"-" }}</td>
+                                    <!--<td>{{ nota.situacao|default:"-" }}</td>-->
+                                    <td>{{ nota.get_situacao_display|default:"-" }}</td>
                                 </tr>
                             {% empty %}
                                 <tr>
@@ -151,10 +152,16 @@
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/js/data-table-custom.js' %}"></script>
+<!--<script src="{% static 'assets/pages/data-table/js/data-table-custom.js' %}"></script>-->
 
 <script>
 $(document).ready(function () {
+    $('#TabelaNotas').DataTable({
+        paging: false,
+        searching: false,
+        info: false,
+        ordering: true
+    });
     $('#btn-limpar').on('click', function () {
         $('#filtro-disciplina').val('');
         $('#filtro-situacao').val('');

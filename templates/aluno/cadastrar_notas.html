@@ -171,7 +171,9 @@
 
                     <!-- BOTÕES -->
                     <div>
+                        {% if not editando %}
                         <button type="reset" class="btn btn-out btn-square" style="float: right; margin-right: 16px; background-color: #ff6600; border-color: #ff6600; color: white;">Limpar</button>
+                        {% endif %}
                         <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
                         <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
                     </div>
