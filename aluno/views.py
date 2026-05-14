@@ -69,6 +69,7 @@ def boletim_aluno(request):
 
     disciplina_id = request.POST.get('disciplina', '')
     situacao_selecionada = request.POST.get('situacao', '')
+    ano_selecionado      = request.POST.get('ano', '')
 
     if disciplina_id:
         notas = notas.filter(disciplina_id=disciplina_id)
@@ -76,14 +77,22 @@ def boletim_aluno(request):
     if situacao_selecionada: 
         notas = notas.filter(situacao=situacao_selecionada)
 
-    
+    if ano_selecionado:
+        notas = notas.filter(ano=ano_selecionado)
+
+    anos = Nota.objects.filter(
+        ativo=True, aluno=request.user, ano__isnull=False
+    ).values_list('ano', flat=True).distinct().order_by('-ano')
+
     disciplinas = Disciplina.objects.filter(nota__aluno=request.user, ativo=True).distinct()
 
     return render(request, "aluno/minhas_notas.html", {
         "notas":                  notas,
         "disciplinas":            disciplinas,
+        "anos":                   anos, 
         "disciplina_selecionada": disciplina_id,
         "situacao_selecionada": situacao_selecionada,
+        "ano_selecionado":        ano_selecionado,
     })
 
 def deletar_nota(request, id):

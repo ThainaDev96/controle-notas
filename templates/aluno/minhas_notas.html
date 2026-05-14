@@ -20,6 +20,111 @@
     padding-left: 5px;
     padding-right: 5px;
 }
+
+/* Filtros compactos */
+.filtros-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.filtro-item {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 140px;
+}
+
+.filtro-item label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.filtro-item .form-control {
+    height: 36px;
+    font-size: 0.88rem;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+}
+
+.btn-filtrar {
+    height: 36px;
+    padding: 0 22px;
+    font-size: 0.88rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Cores das notas */
+.nota-aprovado {
+    color: #28a745;
+    font-weight: 600;
+}
+.nota-recuperacao {
+    color: #fd7e14;
+    font-weight: 600;
+}
+.nota-reprovado {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Badge situação */
+.badge-situacao {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+.badge-aprovado {
+    background-color: #d4edda;
+    color: #28a745;
+}
+.badge-recuperacao {
+    background-color: #fff3cd;
+    color: #e07b00;
+}
+.badge-reprovado {
+    background-color: #f8d7da;
+    color: #dc3545;
+}
+
+/* Legenda */
+.legenda {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.85rem;
+}
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.legenda-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.dot-aprovado    { background-color: #28a745; }
+.dot-recuperacao { background-color: #fd7e14; }
+.dot-reprovado   { background-color: #dc3545; }
+
+.card-header-boletim {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
 </style>
 
 {% endblock %}
@@ -39,62 +144,84 @@
 
 <div class="row">
     <div class="col-sm-12">
+
         <!-- CARD DE FILTROS -->
         <div class="card">
-            <div class="card-block" style="padding: 15px;">
+            <div class="card-block" style="padding: 15px 20px;">
                 <form method="POST" action="{% url 'minhas-notas' %}" id="form-filtros">
                     {% csrf_token %}
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="filtro-disciplina">Disciplina</label>
-                                <select id="filtro-disciplina" name="disciplina" class="form-control">
-                                    <option value="">Todas as disciplinas</option>
-                                    {% for disciplina in disciplinas %}
-                                        <option value="{{ disciplina.id }}"
-                                            {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
-                                            {{ disciplina.nome }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
+
+                    <div class="filtros-wrapper">
+                        <div class="filtro-item">
+                            <label for="filtro-ano">Ano</label>
+                            <select id="filtro-ano" name="ano" class="form-control">
+                                <option value="">Todos os anos</option>
+                                {% for ano in anos %}
+                                    <option value="{{ ano }}"
+                                        {% if ano|stringformat:"s" == ano_selecionado %}selected{% endif %}>
+                                        {{ ano }}
+                                    </option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="filtro-situacao">Situação</label>
-                                <select id="filtro-situacao" name="situacao" class="form-control">
-                                    <option value="">Todas</option>
-                                    <option value="aprovado" {% if situacao_selecionada == "aprovado" %}selected{% endif %}>Aprovado</option>
-                                    <option value="recuperacao" {% if situacao_selecionada == "recuperacao" %}selected{% endif %}>Em Recuperação</option>
-                                    <option value="reprovado" {% if situacao_selecionada == "reprovado" %}selected{% endif %}>Reprovado</option>
-                                </select>
-                            </div>
+
+                        <div class="filtro-item">
+                            <label for="filtro-disciplina">Disciplina</label>
+                            <select id="filtro-disciplina" name="disciplina" class="form-control">
+                                <option value="">Todas as disciplinas</option>
+                                {% for disciplina in disciplinas %}
+                                    <option value="{{ disciplina.id }}"
+                                        {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
+                                        {{ disciplina.nome }}
+                                    </option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <div class="form-group w-100">
-                                <button type="submit" class="btn btn-primary btn-block">
-                                    <i class="ti-filter"></i> Filtrar
-                                </button>
-                            </div>
+
+                        <div class="filtro-item">
+                            <label for="filtro-situacao">Situação</label>
+                            <select id="filtro-situacao" name="situacao" class="form-control">
+                                <option value="">Todas</option>
+                                <option value="aprovado" {% if situacao_selecionada == "aprovado" %}selected{% endif %}>Aprovado</option>
+                                <option value="recuperacao" {% if situacao_selecionada == "recuperacao" %}selected{% endif %}>Em Recuperação</option>
+                                <option value="reprovado" {% if situacao_selecionada == "reprovado" %}selected{% endif %}>Reprovado</option>
+                            </select>
                         </div>
+
+                        <button type="submit" class="btn btn-primary btn-filtrar">
+                            <i class="ti-filter"></i> Filtrar
+                        </button>
                     </div>
-                    <div class="row mt-2">
-                        <div class="col-md-12">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar">
-                                <i class="ti-close"></i> Limpar filtros
-                            </button>
-                        </div>
+
+                    <div style="margin-top: 8px;">
+                        <a href="{% url 'minhas-notas' %}" class="btn btn-outline-secondary btn-sm" style="font-size:0.78rem;">
+                            <i class="ti-close"></i> Limpar filtros
+                        </a>
                     </div>
+
                 </form>
             </div>
         </div>
         <!-- FIM CARD DE FILTROS -->
-        <div class="card">
 
+        <div class="card">
             <div class="card-header">
-                <h5>Boletim</h5>
-                <div class="card-header-right">
-                    <i class="icofont icofont-spinner-alt-5"></i>
+                <div class="card-header-boletim w-100">
+                    <h5 class="mb-0">Boletim</h5>
+                    <div class="legenda">
+                        <div class="legenda-item">
+                            <span class="legenda-dot dot-aprovado"></span>
+                            <span>Aprovado</span>
+                        </div>
+                        <div class="legenda-item">
+                            <span class="legenda-dot dot-recuperacao"></span>
+                            <span>Recuperação</span>
+                        </div>
+                        <div class="legenda-item">
+                            <span class="legenda-dot dot-reprovado"></span>
+                            <span>Reprovado</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -115,16 +242,47 @@
 
                         <tbody>
                             {% for nota in notas %}
-                                <tr>
-                                    <td>{{ nota.disciplina }}</td>
-                                    <td>{{ nota.nota_p1|default:"-" }}</td>
-                                    <td>{{ nota.nota_p2|default:"-" }}</td>
-                                    <td>{{ nota.nota_t1|default:"-" }}</td>
-                                    <td>{{ nota.nota_t2|default:"-" }}</td>
-                                    <td>{{ nota.media_final|default:"-" }}</td>
-                                    <!--<td>{{ nota.situacao|default:"-" }}</td>-->
-                                    <td>{{ nota.get_situacao_display|default:"-" }}</td>
-                                </tr>
+                                {% if nota.situacao == 'aprovado' %}
+                                    <tr>
+                                        <td>{{ nota.disciplina }}</td>
+                                        <td class="nota-aprovado">{{ nota.nota_p1|default:"-" }}</td>
+                                        <td class="nota-aprovado">{{ nota.nota_p2|default:"-" }}</td>
+                                        <td class="nota-aprovado">{{ nota.nota_t1|default:"-" }}</td>
+                                        <td class="nota-aprovado">{{ nota.nota_t2|default:"-" }}</td>
+                                        <td class="nota-aprovado">{{ nota.media_final|default:"-" }}</td>
+                                        <td><span class="badge-situacao badge-aprovado">Aprovado</span></td>
+                                    </tr>
+                                {% elif nota.situacao == 'recuperacao' %}
+                                    <tr>
+                                        <td>{{ nota.disciplina }}</td>
+                                        <td class="nota-recuperacao">{{ nota.nota_p1|default:"-" }}</td>
+                                        <td class="nota-recuperacao">{{ nota.nota_p2|default:"-" }}</td>
+                                        <td class="nota-recuperacao">{{ nota.nota_t1|default:"-" }}</td>
+                                        <td class="nota-recuperacao">{{ nota.nota_t2|default:"-" }}</td>
+                                        <td class="nota-recuperacao">{{ nota.media_final|default:"-" }}</td>
+                                        <td><span class="badge-situacao badge-recuperacao">Em Recuperação</span></td>
+                                    </tr>
+                                {% elif nota.situacao == 'reprovado' %}
+                                    <tr>
+                                        <td>{{ nota.disciplina }}</td>
+                                        <td class="nota-reprovado">{{ nota.nota_p1|default:"-" }}</td>
+                                        <td class="nota-reprovado">{{ nota.nota_p2|default:"-" }}</td>
+                                        <td class="nota-reprovado">{{ nota.nota_t1|default:"-" }}</td>
+                                        <td class="nota-reprovado">{{ nota.nota_t2|default:"-" }}</td>
+                                        <td class="nota-reprovado">{{ nota.media_final|default:"-" }}</td>
+                                        <td><span class="badge-situacao badge-reprovado">Reprovado</span></td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td>{{ nota.disciplina }}</td>
+                                        <td>{{ nota.nota_p1|default:"-" }}</td>
+                                        <td>{{ nota.nota_p2|default:"-" }}</td>
+                                        <td>{{ nota.nota_t1|default:"-" }}</td>
+                                        <td>{{ nota.nota_t2|default:"-" }}</td>
+                                        <td>{{ nota.media_final|default:"-" }}</td>
+                                        <td>{{ nota.get_situacao_display|default:"-" }}</td>
+                                    </tr>
+                                {% endif %}
                             {% empty %}
                                 <tr>
                                     <td colspan="9">Nenhuma nota encontrada</td>
@@ -152,7 +310,6 @@
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
-<!--<script src="{% static 'assets/pages/data-table/js/data-table-custom.js' %}"></script>-->
 
 <script>
 $(document).ready(function () {
@@ -161,10 +318,6 @@ $(document).ready(function () {
         searching: false,
         info: false,
         ordering: true
-    });
-    $('#btn-limpar').on('click', function () {
-        $('#filtro-disciplina').val('');
-        $('#filtro-situacao').val('');
     });
 });
 </script>

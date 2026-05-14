@@ -52,6 +52,12 @@ class Nota(models.Model):
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+    ano = models.PositiveIntegerField(verbose_name="Ano", null=True)
+    periodo = models.CharField(choices=[
+        ("1_trimestre", "1° Trimestre"),
+        ("2_trimestre", "2° Trimestre"),
+        ("3_trimestre", "3° Trimestre"),
+    ], default="1_trimestre", verbose_name="Período/Trimestre")
 
     # def __str__(self):
     #     return self.aluno
