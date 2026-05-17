@@ -5,7 +5,7 @@ from aluno.models import Disciplina, Nota, Turma, Matricula
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.db.models import Min
-from django.urls import reverse
+from datetime import datetime
 
 
 def login_view(request):
@@ -148,6 +148,11 @@ def cadastrar_notas(request):
         nota_t1       = request.POST.get('nota_t1') or None
         nota_t2       = request.POST.get('nota_t2') or None
         ano           = request.POST.get('ano') or None
+        turma         = request.POST.get('turma') or None
+
+        if turma and disciplina_id:
+            request.session['ultima_turma'] = turma
+            request.session['ultima_disciplina'] = disciplina_id
 
         # Não deixa criar um registro duplicado
         existe_nota = Nota.objects.filter(
@@ -156,15 +161,14 @@ def cadastrar_notas(request):
             ano=ano
         ).first()
         if existe_nota:
-            matricula = Matricula.objects.filter(aluno=existe_nota.aluno).first()
-            turma_do_aluno = matricula.turma if matricula else None
-            
             contexto = {
-                "turmas": Turma.objects.all(),
+                "turmas": Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct(),
                 "disciplinas": Disciplina.objects.all(),
-                "nota": existe_nota,
-                "editando": True,
-                "turma_do_aluno": turma_do_aluno,
+                #"nota": existe_nota,
+                "editando": False,
+                "ano_atual": datetime.now().year,
+                "ultima_turma": request.session.get('ultima_turma', ''),
+                "ultima_disciplina": request.session.get('ultima_disciplina', ''),
             }
             messages.error(request, "Esse aluno já possui um registro para essa disciplina nesse ano!")
             return render(request, "aluno/cadastrar_notas.html", contexto)
@@ -192,8 +196,21 @@ def cadastrar_notas(request):
             media_final=media_final,
             situacao=situacao,
         )
+
+        turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
+        alunos = User.objects.filter(is_staff=False) 
+        disciplinas = Disciplina.objects.filter(ativo=True)
+
         messages.success(request, 'Nota cadastrada com sucesso!')
-        return redirect('lista-notas')
+        return render(request, 'aluno/cadastrar_notas.html', {
+            'turmas': turmas,
+            'alunos': alunos,
+            'disciplinas': disciplinas,
+            "editando": False,
+            "ano_atual": datetime.now().year,
+            "ultima_turma": request.session.get('ultima_turma', ''),
+            "ultima_disciplina": request.session.get('ultima_disciplina', ''),
+        })
 
     turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
     alunos = User.objects.filter(is_staff=False) 
@@ -204,6 +221,7 @@ def cadastrar_notas(request):
         'alunos': alunos,
         'disciplinas': disciplinas,
         "editando": False,
+        "ano_atual": datetime.now().year,
     })
 
 def alunos_por_turma(request):
