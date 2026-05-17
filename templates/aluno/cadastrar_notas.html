@@ -48,6 +48,17 @@
             <div class="card-block">
                 <form method="post" action="{% if editando %}{% url 'editar-nota' nota.pk %}{% else %}{% url 'cadastrar-notas' %}{% endif %}">
                     {% csrf_token %}
+                    <!-- Ano -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Ano</label>
+                        <div class="col-sm-10">
+                            <input type="number"
+                                class="form-control"
+                                name="ano"
+                                value="{{ nota.ano }}" 
+                                placeholder="Digite o ano">
+                        </div>
+                    </div>
                     <!-- TURMA -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Turma</label>
@@ -60,6 +71,21 @@
                                     <option value="{{ turma.id }}"
                                         {% if editando and turma_do_aluno.id == turma.id %}selected{% endif %}>
                                         {{ turma.nome }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- DISCIPLINA -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Disciplina</label>
+                        <div class="col-sm-10">
+                            <select name="disciplina" class="form-control" required>
+                                <option value="">Selecione</option>
+                                {% for disciplina in disciplinas %}
+                                    <option value="{{ disciplina.id }}"
+                                        {% if editando and nota.disciplina.id == disciplina.id %}selected{% endif %}>
+                                        {{ disciplina.nome }}
                                     </option>
                                 {% endfor %}
                             </select>
@@ -79,23 +105,6 @@
                             </select>
                         </div>
                     </div>
-
-                    <!-- DISCIPLINA -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Disciplina</label>
-                        <div class="col-sm-10">
-                            <select name="disciplina" class="form-control" required>
-                                <option value="">Selecione</option>
-                                {% for disciplina in disciplinas %}
-                                    <option value="{{ disciplina.id }}"
-                                        {% if editando and nota.disciplina.id == disciplina.id %}selected{% endif %}>
-                                        {{ disciplina.nome }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
                     <!-- P1 -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">P1</label>

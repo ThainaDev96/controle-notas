@@ -5,6 +5,7 @@ from aluno.models import Disciplina, Nota, Turma, Matricula
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.db.models import Min
+from django.urls import reverse
 
 
 def login_view(request):
@@ -146,6 +147,27 @@ def cadastrar_notas(request):
         nota_p2       = request.POST.get('nota_p2') or None
         nota_t1       = request.POST.get('nota_t1') or None
         nota_t2       = request.POST.get('nota_t2') or None
+        ano           = request.POST.get('ano') or None
+
+        # Não deixa criar um registro duplicado
+        existe_nota = Nota.objects.filter(
+            aluno=aluno_id, 
+            disciplina=disciplina_id,
+            ano=ano
+        ).first()
+        if existe_nota:
+            matricula = Matricula.objects.filter(aluno=existe_nota.aluno).first()
+            turma_do_aluno = matricula.turma if matricula else None
+            
+            contexto = {
+                "turmas": Turma.objects.all(),
+                "disciplinas": Disciplina.objects.all(),
+                "nota": existe_nota,
+                "editando": True,
+                "turma_do_aluno": turma_do_aluno,
+            }
+            messages.error(request, "Esse aluno já possui um registro para essa disciplina nesse ano!")
+            return render(request, "aluno/cadastrar_notas.html", contexto)
 
         # Calcula a média no backend (regra de negócio real)
         notas = [float(n) for n in [nota_p1, nota_p2, nota_t1, nota_t2] if n]
@@ -166,6 +188,7 @@ def cadastrar_notas(request):
             nota_p2=nota_p2,
             nota_t1=nota_t1,
             nota_t2=nota_t2,
+            ano=ano,
             media_final=media_final,
             situacao=situacao,
         )
@@ -180,6 +203,7 @@ def cadastrar_notas(request):
         'turmas': turmas,
         'alunos': alunos,
         'disciplinas': disciplinas,
+        "editando": False,
     })
 
 def alunos_por_turma(request):
