@@ -43,6 +43,17 @@ def lista_notas(request):
 
     turma_nome    = request.POST.get('turma', '')
     disciplina_id = request.POST.get('disciplina', '')
+    ano           = request.POST.get('ano', '')
+
+    # salva na sessão se vieram filtros, senão usa o que já estava
+    if request.method == 'POST':
+        request.session['filtro_turma'] = turma_nome
+        request.session['filtro_disciplina'] = disciplina_id
+        request.session['filtro_ano'] = ano
+    else:
+        turma_nome    = request.session.get('filtro_turma', '')
+        disciplina_id = request.session.get('filtro_disciplina', '')
+        ano           = request.session.get('filtro_ano', '')
 
     if turma_nome:
         alunos_da_turma = User.objects.filter(turmas__nome=turma_nome)
@@ -51,21 +62,24 @@ def lista_notas(request):
     if disciplina_id:
         notas = notas.filter(disciplina_id=disciplina_id)
 
+    if ano:
+        notas = notas.filter(ano=ano)
+
     turmas      = Turma.objects.filter(ativo=True).values_list('nome', flat=True).distinct()
     disciplinas = Disciplina.objects.filter(ativo=True)
+    anos = Nota.objects.filter(ativo=True, ano__isnull=False).values_list('ano', flat=True).distinct().order_by('-ano')
 
     return render(request, "aluno/lista_notas.html", {
         "notas":                  notas,
         "turmas":                 turmas,
         "disciplinas":            disciplinas,
+        "anos":                   anos,
+        "ano_selecionado":        ano,
         "turma_selecionada":      turma_nome,
         "disciplina_selecionada": disciplina_id,
     })
 
 def boletim_aluno(request):
-
-    # request.user.id
-
     notas = Nota.objects.filter(ativo=True, aluno=request.user)
 
     disciplina_id = request.POST.get('disciplina', '')
@@ -99,7 +113,7 @@ def boletim_aluno(request):
 def deletar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
     nota.delete()
-    messages.error(request, "Nota deletada com sucesso!")
+    messages.success(request, "Nota deletada com sucesso!")
     return redirect("lista-notas")
 
 def editar_nota(request, id):
@@ -164,7 +178,6 @@ def cadastrar_notas(request):
             contexto = {
                 "turmas": Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct(),
                 "disciplinas": Disciplina.objects.all(),
-                #"nota": existe_nota,
                 "editando": False,
                 "ano_atual": datetime.now().year,
                 "ultima_turma": request.session.get('ultima_turma', ''),

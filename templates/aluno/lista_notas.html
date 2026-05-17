@@ -48,6 +48,21 @@
 
                         <div class="col-md-4">
                             <div class="form-group">
+                                <label for="filtro-ano">Ano</label>
+                                <select id="filtro-ano" name="ano" class="form-control">
+                                    <option value="">Todos os anos</option>
+                                    {% for ano in anos %}
+                                        <option value="{{ ano }}"
+                                            {% if ano|stringformat:"s" == ano_selecionado %}selected{% endif %}>
+                                            {{ ano }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="form-group">
                                 <label for="filtro-turma">Turma</label>
                                 <select id="filtro-turma" name="turma" class="form-control">
                                     <option value="">Todas as turmas</option>
@@ -191,6 +206,7 @@ $(document).ready(function () {
     $('#btn-limpar').on('click', function () {
         $('#filtro-turma').val('');
         $('#filtro-disciplina').html('<option value="">Todas as disciplinas</option>');
+        $('#filtro-ano').val('');
     });
 });
 </script>
