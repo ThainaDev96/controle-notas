@@ -82,15 +82,12 @@ def lista_notas(request):
 def boletim_aluno(request):
     notas = Nota.objects.filter(ativo=True, aluno=request.user)
 
-    disciplina_id = request.POST.get('disciplina', '')
-    situacao_selecionada = request.POST.get('situacao', '')
-    ano_selecionado      = request.POST.get('ano', '')
+    ano_selecionado = request.POST.get('ano', '')
 
-    if disciplina_id:
-        notas = notas.filter(disciplina_id=disciplina_id)
-
-    if situacao_selecionada: 
-        notas = notas.filter(situacao=situacao_selecionada)
+    if request.method == 'POST':
+        request.session['boletim_ano'] = ano_selecionado
+    else:
+        ano_selecionado = request.session.get('boletim_ano', str(datetime.now().year))
 
     if ano_selecionado:
         notas = notas.filter(ano=ano_selecionado)
@@ -99,15 +96,11 @@ def boletim_aluno(request):
         ativo=True, aluno=request.user, ano__isnull=False
     ).values_list('ano', flat=True).distinct().order_by('-ano')
 
-    disciplinas = Disciplina.objects.filter(nota__aluno=request.user, ativo=True).distinct()
-
     return render(request, "aluno/minhas_notas.html", {
-        "notas":                  notas,
-        "disciplinas":            disciplinas,
-        "anos":                   anos, 
-        "disciplina_selecionada": disciplina_id,
-        "situacao_selecionada": situacao_selecionada,
-        "ano_selecionado":        ano_selecionado,
+        "notas":           notas,
+        "anos":            anos,
+        "ano_selecionado": ano_selecionado,
+        "ano_atual":       datetime.now().year,
     })
 
 def deletar_nota(request, id):

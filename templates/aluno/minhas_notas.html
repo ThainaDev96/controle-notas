@@ -155,39 +155,16 @@
                         <div class="filtro-item">
                             <label for="filtro-ano">Ano</label>
                             <select id="filtro-ano" name="ano" class="form-control">
-                                <option value="">Todos os anos</option>
                                 {% for ano in anos %}
-                                    <option value="{{ ano }}"
-                                        {% if ano|stringformat:"s" == ano_selecionado %}selected{% endif %}>
-                                        {{ ano }}
-                                    </option>
-                                {% endfor %}
+                                <option value="{{ ano }}"
+                                    {% if ano|stringformat:"s" == ano_selecionado|stringformat:"s" %}selected
+                                    {% elif not ano_selecionado and ano == ano_atual %}selected
+                                    {% endif %}>
+                                    {{ ano }}
+                                </option>
+                            {% endfor %}
                             </select>
                         </div>
-
-                        <div class="filtro-item">
-                            <label for="filtro-disciplina">Disciplina</label>
-                            <select id="filtro-disciplina" name="disciplina" class="form-control">
-                                <option value="">Todas as disciplinas</option>
-                                {% for disciplina in disciplinas %}
-                                    <option value="{{ disciplina.id }}"
-                                        {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
-                                        {{ disciplina.nome }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="filtro-item">
-                            <label for="filtro-situacao">Situação</label>
-                            <select id="filtro-situacao" name="situacao" class="form-control">
-                                <option value="">Todas</option>
-                                <option value="aprovado" {% if situacao_selecionada == "aprovado" %}selected{% endif %}>Aprovado</option>
-                                <option value="recuperacao" {% if situacao_selecionada == "recuperacao" %}selected{% endif %}>Em Recuperação</option>
-                                <option value="reprovado" {% if situacao_selecionada == "reprovado" %}selected{% endif %}>Reprovado</option>
-                            </select>
-                        </div>
-
                         <button type="submit" class="btn btn-primary btn-filtrar">
                             <i class="ti-filter"></i> Filtrar
                         </button>
