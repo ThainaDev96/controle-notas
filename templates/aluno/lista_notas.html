@@ -128,8 +128,8 @@
                                 <th>Nome</th>
                                 <th>Disciplina</th>
                                 <th>P1</th>
-                                <th>P2</th>
                                 <th>T1</th>
+                                <th>P2</th>
                                 <th>T2</th>
                                 <th>MF</th>
                                 <th>Situação</th>
@@ -141,11 +141,21 @@
                             {% for nota in notas %}
                                 <tr>
                                     <td>{{ nota.aluno.username }}</td>
-                                    <td>{{ nota.aluno.first_name }}</td>
-                                    <td>{{ nota.disciplina }}</td>
+                                    <td>
+                                        {{ nota.aluno.first_name }}
+                                        {% if not turma_selecionada %}
+                                            <br><small class="text-muted">{{ nota.aluno.turmas.first.nome|default:"-" }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ nota.disciplina }}
+                                        {% if not ano_selecionado %}
+                                            <br><small class="text-muted">{{ nota.ano|default:"-" }}</small>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ nota.nota_p1|default:"-" }}</td>
-                                    <td>{{ nota.nota_p2|default:"-" }}</td>
                                     <td>{{ nota.nota_t1|default:"-" }}</td>
+                                    <td>{{ nota.nota_p2|default:"-" }}</td>
                                     <td>{{ nota.nota_t2|default:"-" }}</td>
                                     <td>{{ nota.media_final|default:"-" }}</td>
                                     <td>{{ nota.situacao|default:"-" }}</td>
@@ -204,10 +214,10 @@ $(document).ready(function () {
     });
 
     $('#btn-limpar').on('click', function () {
-        $('#filtro-turma').val('');
-        $('#filtro-disciplina').html('<option value="">Todas as disciplinas</option>');
-        $('#filtro-ano').val('');
-    });
+        window.location.href = "{% url 'lista-notas' %}?limpar=1";
 });
+});
+    
+
 </script>
 {% endblock %}

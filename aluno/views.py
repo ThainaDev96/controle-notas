@@ -40,6 +40,13 @@ def listar_disciplinas(request):
 
 def lista_notas(request):
     notas = Nota.objects.filter(ativo=True)
+    
+     # Limpa sessão e redireciona sem filtro
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_turma', None)
+        request.session.pop('filtro_disciplina', None)
+        request.session.pop('filtro_ano', None)
+        return redirect('lista-notas')
 
     turma_nome    = request.POST.get('turma', '')
     disciplina_id = request.POST.get('disciplina', '')
