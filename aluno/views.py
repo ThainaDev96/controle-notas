@@ -120,7 +120,7 @@ def editar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
     
     if request.method == "POST":
-        nota.aluno_id = request.POST.get("aluno")
+        ##nota.aluno_id = request.POST.get("aluno")
         nota.disciplina_id = request.POST.get("disciplina")
         nota.nota_p1 = request.POST.get("nota_p1")
         nota.nota_p2 = request.POST.get("nota_p2")
@@ -145,7 +145,11 @@ def editar_nota(request, id):
 
     turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
     disciplinas = Disciplina.objects.all()
+
+    aluno_nome = User.objects.filter(id=nota.aluno_id).first()
+
     return render(request, "aluno/cadastrar_notas.html", {
+        'aluno_nome': aluno_nome.first_name,
         "turmas": turmas,
         "disciplinas": disciplinas,
         "nota": nota,
