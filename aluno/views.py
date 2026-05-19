@@ -136,7 +136,7 @@ def editar_nota(request, id):
     matricula = Matricula.objects.filter(aluno=nota.aluno).first()
     turma_do_aluno = matricula.turma if matricula else None
 
-    turmas = Turma.objects.all()
+    turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
     disciplinas = Disciplina.objects.all()
     return render(request, "aluno/cadastrar_notas.html", {
         "turmas": turmas,
