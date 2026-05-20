@@ -3,10 +3,11 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from aluno.models import Disciplina, Nota, Turma, Matricula
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Min
 from datetime import datetime
-
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 
 def login_view(request):
     if request.method == "POST":
@@ -262,5 +263,23 @@ def disciplinas_por_turma(request):
     ).distinct().values('id', 'nome')
 
     return JsonResponse({'disciplinas': list(disciplinas)})
+
+def gerar_relatorio(request):
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="relatorio.pdf"'
+
+    width, height = A4
+    c = canvas.Canvas(response, pagesize=A4)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(72, height - 72, "Relatório de Pedidos")
+
+    c.setFont("Helvetica", 12)
+    c.drawString(72, height - 110, "Gerado automaticamente pelo sistema.")
+
+    c.line(72, height - 120, width - 72, height - 120)
+
+    c.save()
+    return response
     
     
