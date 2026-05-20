@@ -266,18 +266,54 @@ def disciplinas_por_turma(request):
 
 def gerar_relatorio(request):
     response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="relatorio.pdf"'
+    response['Content-Disposition'] = 'attachment; filename="boletim.pdf"'
 
     width, height = A4
     c = canvas.Canvas(response, pagesize=A4)
 
+    # Cabeçalho
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(72, height - 72, "Relatório de Pedidos")
+    c.drawString(72, height - 60, "Boletim Escolar")
 
     c.setFont("Helvetica", 12)
-    c.drawString(72, height - 110, "Gerado automaticamente pelo sistema.")
+    c.drawString(72, height - 85, f"Aluno: {request.user.first_name}")
 
-    c.line(72, height - 120, width - 72, height - 120)
+    ano = request.session.get('boletim_ano', str(datetime.now().year))
+    c.drawString(72, height - 105, f"Ano: {ano}")
+
+    c.line(72, height - 115, width - 72, height - 115)
+
+    # Cabeçalho da tabela
+    y = height - 140
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72,  y, "Disciplina")
+    c.drawString(250, y, "P1")
+    c.drawString(290, y, "P2")
+    c.drawString(330, y, "T1")
+    c.drawString(370, y, "T2")
+    c.drawString(410, y, "MF")
+    c.drawString(450, y, "Situação")
+
+    c.line(72, y - 5, width - 72, y - 5)
+
+    # Linhas de notas
+    notas = Nota.objects.filter(ativo=True, aluno=request.user, ano=ano)
+    y -= 25
+    c.setFont("Helvetica", 10)
+
+    for nota in notas:
+        c.drawString(72,  y, str(nota.disciplina))
+        c.drawString(250, y, str(nota.nota_p1 or '-'))
+        c.drawString(290, y, str(nota.nota_p2 or '-'))
+        c.drawString(330, y, str(nota.nota_t1 or '-'))
+        c.drawString(370, y, str(nota.nota_t2 or '-'))
+        c.drawString(410, y, str(nota.media_final or '-'))
+        c.drawString(450, y, str(nota.situacao or '-'))
+        y -= 20
+
+        if y < 72:  # nova página se acabar espaço
+            c.showPage()
+            y = height - 72
 
     c.save()
     return response
