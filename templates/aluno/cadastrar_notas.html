@@ -63,36 +63,42 @@
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Turma</label>
                         <div class="col-sm-10">
-                            <select name="turma" id="turma" class="form-control"
-                                data-turma-selecionada="{% if editando %}{{ turma_do_aluno.id }}{% endif %}"
-                                data-aluno-selecionado="{% if editando %}{{ nota.aluno.id }}{% endif %}">
-                                <option value="">Selecione a turma</option>
-                                {% for turma in turmas %}
-                                    <option value="{{ turma.id }}"
-                                        {% if editando and turma_do_aluno.id == turma.id %}selected
-                                        {% elif not editando and ultima_turma == turma.id|stringformat:"s" %}selected
-                                        {% endif %}>
-                                        {{ turma.nome }}
-                                    </option>
-                                {% endfor %}
-                            </select>
+                            {% if editando %}
+                                <input type="text" class="form-control" value="{{ turma_do_aluno.nome }}" readonly style="background-color: #f4f7fa;">
+                                <input type="hidden" name="turma" value="{{ turma_do_aluno.id }}">
+                            {% else %}
+                                <select name="turma" id="turma" class="form-control"
+                                    data-turma-selecionada="{{ turma_do_aluno.id }}"
+                                    data-aluno-selecionado="{{ nota.aluno.id }}">
+                                    <option value="">Selecione a turma</option>
+                                    {% for turma in turmas %}
+                                        <option value="{{ turma.id }}"
+                                            {% if ultima_turma == turma.id|stringformat:"s" %}selected{% endif %}>
+                                            {{ turma.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            {% endif %}
                         </div>
                     </div>
                     <!-- DISCIPLINA -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Disciplina</label>
                         <div class="col-sm-10">
-                            <select name="disciplina" class="form-control" required {% if editando %} readonly {% endif %}>
-                                <option value="">Selecione</option>
-                                {% for disciplina in disciplinas %}
-                                    <option value="{{ disciplina.id }}"
-                                        {% if editando and nota.disciplina.id == disciplina.id %}selected
-                                        {% elif not editando and ultima_disciplina == disciplina.id|stringformat:"s" %}selected
-                                        {% endif %}>
-                                        {{ disciplina.nome }}
-                                    </option>
-                                {% endfor %}
-                            </select>
+                            {% if editando %}
+                                <input type="text" class="form-control" value="{{ nota.disciplina.nome }}" readonly style="background-color: #f4f7fa;">
+                                <input type="hidden" name="disciplina" value="{{ nota.disciplina.id }}">
+                            {% else %}
+                                <select name="disciplina" class="form-control" required>
+                                    <option value="">Selecione</option>
+                                    {% for disciplina in disciplinas %}
+                                        <option value="{{ disciplina.id }}"
+                                            {% if ultima_disciplina == disciplina.id|stringformat:"s" %}selected{% endif %}>
+                                            {{ disciplina.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            {% endif %}
                         </div>
                     </div>
                     <!-- ALUNO -->
@@ -225,7 +231,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (media >= 7.0) {
                 situacaoSelect.value = 'aprovado';
             } else if (media >= 5.0) {
-                situacaoSelect.value = 'recuperacao';
+                situacaoSelect.value = 'recuperação';
             } else {
                 situacaoSelect.value = 'reprovado';
             }

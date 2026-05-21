@@ -158,7 +158,7 @@
                                     <td>{{ nota.nota_p2|default:"-" }}</td>
                                     <td>{{ nota.nota_t2|default:"-" }}</td>
                                     <td>{{ nota.media_final|default:"-" }}</td>
-                                    <td>{{ nota.situacao|default:"-" }}</td>
+                                    <td>{% if nota.situacao == 'recuperacao' %}recuperação{% else %}{{ nota.situacao|default:"-" }}{% endif %}</td>
                                     <td>
                                         <a href="{% url 'deletar-nota' nota.id %}" class="btn btn-out btn-danger btn-square">
                                             <i class="ti-trash"></i>
@@ -186,12 +186,6 @@
 
 {% block extra_js %}
 <script src="{% static 'vendor/datatables.net/js/jquery.dataTables.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/dataTables.buttons.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/jszip.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/pdfmake.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/vfs_fonts.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/buttons.html5.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/extensions/buttons/js/buttons.print.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>

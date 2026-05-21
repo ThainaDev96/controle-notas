@@ -40,7 +40,7 @@ def listar_disciplinas(request):
     return render(request, 'aluno/lista.html', {'disciplinas': disciplinas})
 
 def lista_notas(request):
-    notas = Nota.objects.filter(ativo=True)
+    notas = Nota.objects.filter(ativo=True).select_related('aluno', 'disciplina').prefetch_related('aluno__turmas')# Busca as notas com os dados em uma única query
     
      # Limpa sessão e redireciona sem filtro
     if request.GET.get('limpar'):
