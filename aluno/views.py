@@ -141,8 +141,7 @@ def editar_nota(request, id):
         nota.save()
         return redirect("lista-notas")
 
-    matricula = Matricula.objects.filter(aluno=nota.aluno).first()
-    turma_do_aluno = matricula.turma if matricula else None
+    turma_do_aluno = Turma.objects.filter(alunos=nota.aluno,disciplina=nota.disciplina).first()
 
     turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
     disciplinas = Disciplina.objects.all()
