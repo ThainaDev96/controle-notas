@@ -123,10 +123,10 @@ def editar_nota(request, id):
     if request.method == "POST":
         ##nota.aluno_id = request.POST.get("aluno")
         nota.disciplina_id = request.POST.get("disciplina")
-        nota.nota_p1 = request.POST.get("nota_p1")
-        nota.nota_p2 = request.POST.get("nota_p2")
-        nota.nota_t1 = request.POST.get("nota_t1")
-        nota.nota_t2 = request.POST.get("nota_t2")
+        nota.nota_p1 = request.POST.get("nota_p1") or None
+        nota.nota_p2 = request.POST.get("nota_p2") or None
+        nota.nota_t1 = request.POST.get("nota_t1") or None
+        nota.nota_t2 = request.POST.get("nota_t2") or None
         nota.media_final = request.POST.get("media_final")
 
         media = float(nota.media_final)
