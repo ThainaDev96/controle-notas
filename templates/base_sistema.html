@@ -185,17 +185,16 @@
     <script src="{% static 'assets/js/jquery.mCustomScrollbar.concat.min.js' %}"></script>
     <script src="{% static 'assets/js/script.js' %}"></script>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const alertBox = document.querySelector(".alert-auto-hide");
-            if (alertBox) {
-                setTimeout(() => {
-                    alertBox.style.transition = "opacity 0.8s";
-                    alertBox.style.opacity = "0";
-                    setTimeout(() => alertBox.remove(), 900);
-                }, 120000);
-            }
+    <script> 
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll(".alert-auto-hide").forEach(function (alertBox) {
+            setTimeout(() => {
+                alertBox.style.transition = "opacity 0.8s";
+                alertBox.style.opacity = "0";
+                setTimeout(() => alertBox.remove(), 800);
+            }, 10000);
         });
+    });
     </script>
     
 

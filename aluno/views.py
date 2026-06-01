@@ -139,6 +139,7 @@ def editar_nota(request, id):
 
         nota.situacao = situacao
         nota.save()
+        messages.success(request, "Nota editada com sucesso!")
         return redirect("lista-notas")
 
     turma_do_aluno = Turma.objects.filter(alunos=nota.aluno,disciplina=nota.disciplina).first()
