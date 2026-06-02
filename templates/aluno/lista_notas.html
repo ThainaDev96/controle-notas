@@ -157,8 +157,13 @@
                                     <td>{{ nota.nota_t1|default:"-" }}</td>
                                     <td>{{ nota.nota_p2|default:"-" }}</td>
                                     <td>{{ nota.nota_t2|default:"-" }}</td>
-                                    <td>{{ nota.media_final|default:"-" }}</td>
-                                    <td>{% if nota.situacao == 'recuperacao' %}recuperação{% else %}{{ nota.situacao|default:"-" }}{% endif %}</td>
+                                    {% if nota.nota_p1 is not None and nota.nota_t1 is not None and nota.nota_p2 is not None and nota.nota_t2 is not None %}
+                                        <td>{{ nota.media_final|default:"-" }}</td>
+                                        <td>{% if nota.situacao == 'recuperacao' %}recuperação{% else %}{{ nota.situacao|default:"-" }}{% endif %}</td>
+                                    {% else %}
+                                        <td>-</td>
+                                        <td>-</td>
+                                    {% endif %}
                                     <td>
                                         <a href="#" class="btn btn-out btn-danger btn-square btn-deletar"
                                         data-id="{{ nota.id }}"

@@ -43,12 +43,13 @@ class Nota(models.Model):
         ("aprovado", "Aprovado"),
         ("recuperacao", "Em recuperação"),
         ("reprovado", "Reprovado"),
+        ("cursando", "Cursando"),
     ], verbose_name="Situação")
     nota_p1 = models.FloatField(verbose_name="P1", null=True, blank=True)
     nota_p2 = models.FloatField(verbose_name="P2", null=True, blank=True)
     nota_t1 = models.FloatField(verbose_name="T1", null=True, blank=True)
     nota_t2 = models.FloatField(verbose_name="T2", null=True, blank=True)
-    media_final = models.FloatField(verbose_name="Média Final")
+    media_final = models.FloatField(verbose_name="Média Final", null=True, blank=True)
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")

@@ -127,17 +127,20 @@ def editar_nota(request, id):
         nota.nota_p2 = request.POST.get("nota_p2") or None
         nota.nota_t1 = request.POST.get("nota_t1") or None
         nota.nota_t2 = request.POST.get("nota_t2") or None
-        nota.media_final = request.POST.get("media_final")
+        nota.media_final = request.POST.get("media_final") or None
 
-        media = float(nota.media_final)
-        if media >= 7:
-            situacao = "aprovado"
-        elif media >= 5:
-            situacao = "recuperacao"
+        if nota.media_final is not None:
+            media = float(nota.media_final)
+            if media >= 7:
+                situacao = "aprovado"
+            elif media >= 5:
+                situacao = "recuperacao"
+            else:
+                situacao = "reprovado"
+
+            nota.situacao = situacao
         else:
-            situacao = "reprovado"
-
-        nota.situacao = situacao
+            nota.situacao = "cursando"
         nota.save()
         messages.success(request, "Nota editada com sucesso!")
         return redirect("lista-notas")
