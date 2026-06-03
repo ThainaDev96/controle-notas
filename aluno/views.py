@@ -194,12 +194,14 @@ def cadastrar_notas(request):
             messages.error(request, "Esse aluno já possui um registro para essa disciplina nesse ano!")
             return render(request, "aluno/cadastrar_notas.html", contexto)
 
-        # Calcula a média no backend (regra de negócio real)
+        # Calcula a média
         notas = [float(n) for n in [nota_p1, nota_p2, nota_t1, nota_t2] if n]
-        media_final = round(sum(notas) / len(notas), 2) if notas else 0
+        media_final = round(sum(notas) / len(notas), 2) if len(notas) == 4 else None
 
         # Situação automática pela média
-        if media_final >= 7:
+        if media_final is None:
+            situacao = 'cursando'
+        elif media_final >= 7:
             situacao = 'aprovado'
         elif media_final >= 5:
             situacao = 'recuperacao'
