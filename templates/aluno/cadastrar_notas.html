@@ -259,6 +259,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 document.getElementById('turma').addEventListener('change', function () {
     const turmaId = this.value;
+    const turmaNome = this.options[this.selectedIndex].text;
     const alunoSelect = document.getElementById('aluno');
 
     if (!turmaId) {
@@ -266,7 +267,7 @@ document.getElementById('turma').addEventListener('change', function () {
         return;
     }
 
-    fetch(`/alunos-por-turma/?turma_id=${turmaId}`)
+    fetch(`/alunos-por-turma/?turma_nome=${turmaNome}`)
         .then(res => res.json())
         .then(data => {
             alunoSelect.innerHTML = '<option value="">Selecione o aluno</option>';

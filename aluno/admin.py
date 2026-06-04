@@ -12,7 +12,7 @@ class TurmaAdmin(admin.ModelAdmin):
 @admin.register(Matricula)
 class MatriculaAdmin(admin.ModelAdmin):
     list_display = ("aluno", "turma")
-    search_fields = ("aluno", "turma")
+    search_fields = ("aluno__username", "aluno__first_name", "turma__nome")
     list_filter = ("aluno", "turma")
 
 

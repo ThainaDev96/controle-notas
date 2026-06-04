@@ -221,7 +221,7 @@ def cadastrar_notas(request):
         )
 
         turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
-        alunos = User.objects.filter(is_staff=False) 
+        alunos = User.objects.filter(groups__name='aluno') 
         disciplinas = Disciplina.objects.filter(ativo=True)
 
         messages.success(request, 'Nota cadastrada com sucesso!')
@@ -236,7 +236,7 @@ def cadastrar_notas(request):
         })
 
     turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
-    alunos = User.objects.filter(is_staff=False) 
+    alunos = User.objects.filter(groups__name='aluno') 
     disciplinas = Disciplina.objects.filter(ativo=True)
 
     return render(request, 'aluno/cadastrar_notas.html', {
@@ -248,12 +248,17 @@ def cadastrar_notas(request):
     })
 
 def alunos_por_turma(request):
-    turma_id = request.GET.get('turma_id')
-    if not turma_id:
+    turma_nome = request.GET.get('turma_nome')
+    if not turma_nome:
         return JsonResponse({'alunos': []})
-    
-    turma = get_object_or_404(Turma, id=turma_id)
-    alunos = turma.alunos.all().values('id', 'first_name', 'username')
+
+    alunos = User.objects.filter(
+        turmas__nome=turma_nome,
+        turmas__ativo=True
+    ).exclude(
+        groups__name='professor'
+    ).distinct().values('id', 'first_name', 'username').order_by('first_name')
+
     return JsonResponse({'alunos': list(alunos)})
 
 def disciplinas_por_turma(request):
