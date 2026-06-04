@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Disciplina(models.Model):
@@ -62,3 +64,9 @@ class Nota(models.Model):
 
     # def __str__(self):
     #     return self.aluno
+
+
+@receiver(post_save, sender=Matricula)
+def vincular_aluno_turma(sender, instance, created, **kwargs):
+    if created:
+        instance.turma.alunos.add(instance.aluno)
