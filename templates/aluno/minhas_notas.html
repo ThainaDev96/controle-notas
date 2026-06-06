@@ -74,6 +74,10 @@
     color: #dc3545;
     font-weight: 600;
 }
+.nota-cursando {
+    color: #d4a000;
+    font-weight: 600;
+}
 
 /* Badge situação */
 .badge-situacao {
@@ -94,6 +98,10 @@
 .badge-reprovado {
     background-color: #f8d7da;
     color: #dc3545;
+}
+.badge-cursando {
+    background-color: #fff3cd;
+    color: #d4a000;
 }
 
 /* Legenda */
@@ -117,14 +125,57 @@
 .dot-aprovado    { background-color: #28a745; }
 .dot-recuperacao { background-color: #fd7e14; }
 .dot-reprovado   { background-color: #dc3545; }
+.dot-cursando { background-color: #d4a000; }
 
 .card-header-boletim {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
     gap: 10px;
 }
+/* Linha situação final */
+.sf-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    color: #444;
+    border-top: 2px solid #dee2e6;
+    background: #f8f9fa;
+}
+.sf-label { font-weight: 700; color: #333; margin-right: 4px; }
+.sf-sep { color: #ccc; margin: 0 2px; }
+.sf-aprovado    { color: #28a745; font-weight: 600; }
+.sf-recuperacao { color: #e07b00; font-weight: 600; }
+.sf-reprovado   { color: #dc3545; font-weight: 600; }
+.sf-cursando { color: #f5c400; font-weight: 600; }
+.sf-status-aprovado  { color: #28a745; font-weight: 700; }
+.sf-status-reprovado { color: #dc3545; font-weight: 700; }
+.sf-status-andamento { color: #856404; font-weight: 700; }
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: nowrap;
+}
+
+.turma-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0f0f0;
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
+}
+
+.turma-sep { color: #bbb; }
 </style>
 
 {% endblock %}
@@ -177,7 +228,10 @@
         <div class="card">
             <div class="card-header">
                 <div class="card-header-boletim w-100">
-                    <h5 class="mb-0">Boletim</h5>
+                    <div class="header-left">
+                        <h5 class="mb-0">Boletim</h5>
+                        <span class="turma-badge">{{ turma_aluno }} · {{ ano_selecionado }}</span>
+                    </div>
                     <div class="legenda">
                         <div class="legenda-item">
                             <span class="legenda-dot dot-aprovado"></span>
@@ -190,6 +244,10 @@
                         <div class="legenda-item">
                             <span class="legenda-dot dot-reprovado"></span>
                             <span>Reprovado</span>
+                        </div>
+                        <div class="legenda-item">
+                            <span class="legenda-dot dot-cursando"></span>
+                            <span>Cursando</span>
                         </div>
                     </div>
                 </div>
@@ -245,12 +303,12 @@
                                 {% else %}
                                     <tr>
                                         <td>{{ nota.disciplina }}</td>
-                                        <td>{{ nota.nota_p1|default:"-" }}</td>
-                                        <td>{{ nota.nota_p2|default:"-" }}</td>
-                                        <td>{{ nota.nota_t1|default:"-" }}</td>
-                                        <td>{{ nota.nota_t2|default:"-" }}</td>
-                                        <td>{{ nota.media_final|default:"-" }}</td>
-                                        <td>{{ nota.get_situacao_display|default:"-" }}</td>
+                                        <td class="nota-cursando">{{ nota.nota_p1|default:"-" }}</td>
+                                        <td class="nota-cursando">{{ nota.nota_p2|default:"-" }}</td>
+                                        <td class="nota-cursando">{{ nota.nota_t1|default:"-" }}</td>
+                                        <td class="nota-cursando">{{ nota.nota_t2|default:"-" }}</td>
+                                        <td class="nota-cursando">{{ nota.media_final|default:"-" }}</td>
+                                        <td><span class="badge-situacao badge-cursando">Cursando</span></td>
                                     </tr>
                                 {% endif %}
                             {% empty %}
@@ -263,6 +321,29 @@
                     </table>
                 </div>
             </div>
+            <!-- Situação Final -->
+            {% if notas %}
+            <div class="sf-row">
+                <span class="sf-label">Situação Final:</span>
+                {% if situacao_final == 'aprovado' %}
+                    <span class="sf-status-aprovado">Aprovado de ano</span>
+                {% elif situacao_final == 'reprovado' %}
+                    <span class="sf-status-reprovado">Reprovado de ano</span>
+                {% else %}
+                    <span class="sf-status-andamento">Em andamento</span>
+                {% endif %}
+                <span class="sf-sep">·</span>
+                <span class="sf-aprovado">{{ total_aprovadas }} aprovadas</span>
+                <span class="sf-sep">·</span>
+                <span class="sf-recuperacao">{{ total_recuperacao }} em recuperação</span>
+                <span class="sf-sep">·</span>
+                <span class="sf-reprovado">{{ total_reprovadas }} reprovadas</span>
+                {% if situacao_final == 'em_andamento' %}
+                    <span class="sf-sep">·</span>
+                    <span class="sf-cursando">{{ total_cursando }} cursando</span>
+                {% endif %}
+            </div>
+            {% endif %}
             <!-- Botão download -->
             <div style="text-align: right; padding: 0 20px 15px 0;">
                 <a href="{% url 'gerar-relatorio' %}" class="btn btn-primary btn-filtrar" style="border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">

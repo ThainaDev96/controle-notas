@@ -104,11 +104,28 @@ def boletim_aluno(request):
         ativo=True, aluno=request.user, ano__isnull=False
     ).values_list('ano', flat=True).distinct().order_by('-ano')
 
+    todas_lancadas = notas.filter(situacao='cursando').count() == 0
+    if not todas_lancadas or notas.count() == 0:
+        situacao_final = 'em_andamento'
+    else:
+        reprovadas = notas.filter(situacao='reprovado').count()
+        situacao_final = 'reprovado' if reprovadas > 2 else 'aprovado'
+
+    turma_aluno = Turma.objects.filter(
+        alunos=request.user
+    ).values_list('nome', flat=True).first()
+
     return render(request, "aluno/minhas_notas.html", {
         "notas":           notas,
         "anos":            anos,
         "ano_selecionado": ano_selecionado,
-        "ano_atual":       datetime.now().year,
+        "situacao_final":  situacao_final,
+        "ano_atual":       datetime.now().year,   
+        "total_aprovadas":   notas.filter(situacao='aprovado').count(),
+        "total_recuperacao": notas.filter(situacao='recuperacao').count(),
+        "total_reprovadas":  notas.filter(situacao='reprovado').count(),
+        "total_cursando":    notas.filter(situacao='cursando').count(),
+        "turma_aluno":       turma_aluno,
     })
 
 def deletar_nota(request, id):
@@ -281,15 +298,19 @@ def gerar_relatorio(request):
     width, height = A4
     c = canvas.Canvas(response, pagesize=A4)
 
+    turma_aluno = Turma.objects.filter(
+        alunos=request.user
+    ).values_list('nome', flat=True).first()
+
+    ano = request.session.get('boletim_ano', str(datetime.now().year))
+
     # Cabeçalho
     c.setFont("Helvetica-Bold", 16)
     c.drawString(72, height - 60, "Boletim Escolar")
 
     c.setFont("Helvetica", 12)
     c.drawString(72, height - 85, f"Aluno: {request.user.first_name}")
-
-    ano = request.session.get('boletim_ano', str(datetime.now().year))
-    c.drawString(72, height - 105, f"Ano: {ano}")
+    c.drawString(72, height - 105, f"Turma: {turma_aluno or '-'}  ·  Ano: {ano}")
 
     c.line(72, height - 115, width - 72, height - 115)
 
@@ -321,11 +342,36 @@ def gerar_relatorio(request):
         c.drawString(450, y, str(nota.situacao or '-'))
         y -= 20
 
-        if y < 72:  # nova página se acabar espaço
+        if y < 72:
             c.showPage()
             y = height - 72
 
+    # Situação Final
+    todas_lancadas = notas.filter(situacao='cursando').count() == 0
+    if not todas_lancadas or notas.count() == 0:
+        situacao_final = 'Em andamento'
+    else:
+        reprovadas = notas.filter(situacao='reprovado').count()
+        situacao_final = 'Reprovado de ano' if reprovadas > 2 else 'Aprovado de ano'
+
+    total_aprovadas   = notas.filter(situacao='aprovado').count()
+    total_recuperacao = notas.filter(situacao='recuperacao').count()
+    total_reprovadas  = notas.filter(situacao='reprovado').count()
+    total_cursando    = notas.filter(situacao='cursando').count()
+
+    y -= 10
+    c.line(72, y, width - 72, y)
+    y -= 18
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(72, y, f"Situação Final: {situacao_final}")
+    y -= 16
+
+    c.setFont("Helvetica", 10)
+    resumo = f"{total_aprovadas} aprovadas  ·  {total_recuperacao} em recuperação  ·  {total_reprovadas} reprovadas"
+    if situacao_final == 'Em andamento':
+        resumo += f"  ·  {total_cursando} cursando"
+    c.drawString(72, y, resumo)
+
     c.save()
     return response
-    
-    
