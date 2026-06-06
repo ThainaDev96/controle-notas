@@ -1,6 +1,7 @@
 from pathlib import Path
 from decouple import config
 import os
+import dj_database_url
 
 # Diretório base do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,7 +13,7 @@ SECRET_KEY = config('DJANGO_SECRET_KEY')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 
 # Hosts permitidos
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Aplicações instaladas
 INSTALLED_APPS = [
@@ -28,6 +29,7 @@ INSTALLED_APPS = [
 # Middlewares
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",            # Segurança básica
+    "whitenoise.middleware.WhiteNoiseMiddleware",               #  
     "django.contrib.sessions.middleware.SessionMiddleware",     # Habilita sessões
     "django.middleware.common.CommonMiddleware",                # Funcionalidades gerais (redirecionamento www, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                # Proteção contra CSRF
@@ -57,15 +59,25 @@ TEMPLATES = [
 ]
 
 # Banco de dados
+
+# Configuração DB Docker
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.postgresql",
+#         "NAME": config("POSTGRES_DB"),
+#         "USER": config("POSTGRES_USER"),
+#         "PASSWORD": config("POSTGRES_PASSWORD"),
+#         "HOST": config("POSTGRES_HOST"),
+#         "PORT": config("POSTGRES_PORT"),
+#     }
+# }
+
+# Configuração DB RailWay
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("POSTGRES_DB"),
-        "USER": config("POSTGRES_USER"),
-        "PASSWORD": config("POSTGRES_PASSWORD"),
-        "HOST": config("POSTGRES_HOST"),
-        "PORT": config("POSTGRES_PORT"),
-    }
+    "default": dj_database_url.config(
+        default=config('DATABASE_URL'),
+        conn_max_age=600,
+    )
 }
 # Tipo padrão de chave primária
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -86,6 +98,8 @@ USE_TZ = True
 
 # Arquivos estáticos
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static"
