@@ -104,11 +104,15 @@ def boletim_aluno(request):
         ativo=True, aluno=request.user, ano__isnull=False
     ).values_list('ano', flat=True).distinct().order_by('-ano')
 
-    todas_lancadas = notas.filter(situacao='cursando').count() == 0
-    if not todas_lancadas or notas.count() == 0:
+    total_aprovadas = notas.filter(situacao='aprovado').count()
+    total_recuperacao = notas.filter(situacao='recuperacao').count()
+    reprovadas = notas.filter(situacao='reprovado').count()
+    total_cursando = notas.filter(situacao='cursando').count()
+    
+    todas_lancadas = total_cursando == 0
+    if not todas_lancadas or notas.count() == 0 or total_recuperacao > 0:
         situacao_final = 'em_andamento'
     else:
-        reprovadas = notas.filter(situacao='reprovado').count()
         situacao_final = 'reprovado' if reprovadas > 2 else 'aprovado'
 
     turma_aluno = Turma.objects.filter(
@@ -121,10 +125,10 @@ def boletim_aluno(request):
         "ano_selecionado": ano_selecionado,
         "situacao_final":  situacao_final,
         "ano_atual":       datetime.now().year,   
-        "total_aprovadas":   notas.filter(situacao='aprovado').count(),
-        "total_recuperacao": notas.filter(situacao='recuperacao').count(),
-        "total_reprovadas":  notas.filter(situacao='reprovado').count(),
-        "total_cursando":    notas.filter(situacao='cursando').count(),
+        "total_aprovadas":   total_aprovadas,
+        "total_recuperacao": total_recuperacao,
+        "total_reprovadas":  reprovadas,
+        "total_cursando":    total_cursando,
         "turma_aluno":       turma_aluno,
     })
 
@@ -347,17 +351,16 @@ def gerar_relatorio(request):
             y = height - 72
 
     # Situação Final
-    todas_lancadas = notas.filter(situacao='cursando').count() == 0
-    if not todas_lancadas or notas.count() == 0:
+    total_cursando = notas.filter(situacao='cursando').count()
+    total_reprovadas = notas.filter(situacao='reprovado').count()
+    total_aprovadas = notas.filter(situacao='aprovado').count()
+    total_recuperacao = notas.filter(situacao='recuperacao').count()
+    
+    todas_lancadas = total_cursando == 0
+    if not todas_lancadas or notas.count() == 0 or total_recuperacao > 0:
         situacao_final = 'Em andamento'
     else:
-        reprovadas = notas.filter(situacao='reprovado').count()
-        situacao_final = 'Reprovado de ano' if reprovadas > 2 else 'Aprovado de ano'
-
-    total_aprovadas   = notas.filter(situacao='aprovado').count()
-    total_recuperacao = notas.filter(situacao='recuperacao').count()
-    total_reprovadas  = notas.filter(situacao='reprovado').count()
-    total_cursando    = notas.filter(situacao='cursando').count()
+        situacao_final = 'Reprovado de ano' if total_reprovadas > 2 else 'Aprovado de ano'
 
     y -= 10
     c.line(72, y, width - 72, y)
