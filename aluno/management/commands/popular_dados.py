@@ -34,7 +34,7 @@ class Command(BaseCommand):
         with open("/app/aluno/arquivos/alunos_exemplo.csv", newline='', encoding='utf-8') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                user = User.objects.create_user(
+                user, criado = User.objects.get_or_create(
                     username=row['matricula'],
                     password=gerar_senha(),
                     first_name=row['nome'],
@@ -107,18 +107,17 @@ class Command(BaseCommand):
                 turma.alunos.set(alunos_da_turma)  # vincula os alunos à turma
 
     def popular_matriculas(self):
-        # Todos os usuários que NÃO são professores e não são superuser
         grupo_professor = Group.objects.get(name="professor")
-        alunos = User.objects.exclude(groups=grupo_professor).exclude(is_superuser=True)
+        alunos = list(User.objects.exclude(groups=grupo_professor).exclude(is_superuser=True))
+        turmas = list(Turma.objects.filter(ativo=True))
 
-        turmas = Turma.objects.filter(ativo=True)
+        # Embaralha os alunos para distribuição aleatória
+        random.shuffle(alunos)
 
-        for aluno in alunos:
-            for turma in turmas:
-                turma, criado = Matricula.objects.get_or_create(
-                    aluno=aluno,
-                    turma=turma,
-                )
+        for i, aluno in enumerate(alunos):
+            # Distribui ciclicamente entre as turmas disponíveis
+            turma = turmas[i % len(turmas)]
+            Matricula.objects.get_or_create(aluno=aluno, turma=turma)
     
     def popular_notas(self):
         disciplinas = Disciplina.objects.all()
