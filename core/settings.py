@@ -14,6 +14,7 @@ DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 
 # Hosts permitidos
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: [s.strip() for s in v.split(',')])
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Aplicações instaladas
 INSTALLED_APPS = [
