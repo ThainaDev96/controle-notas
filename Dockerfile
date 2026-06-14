@@ -15,3 +15,5 @@ COPY . .
 
 # Define o entrypoint para usar tini
 ENTRYPOINT ["/usr/bin/tini", "--"]
+
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && gunicorn core.wsgi --bind 0.0.0.0:$PORT --log-file -"]
