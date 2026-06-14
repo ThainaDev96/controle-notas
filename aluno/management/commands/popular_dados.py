@@ -35,11 +35,13 @@ class Command(BaseCommand):
             reader = csv.DictReader(file)
             for row in reader:
                 user, criado = User.objects.get_or_create(
-                    username=row['matricula'],
-                    password=gerar_senha(),
-                    first_name=row['nome'],
-                    last_name=""
-                )
+                username=row['matricula'],
+                defaults={
+                    'first_name': row['nome'],
+                    'last_name': '',
+                    'password': gerar_senha(),
+                }
+            )
 
     def popular_disciplinas(self):
         professores_disciplinas = [
