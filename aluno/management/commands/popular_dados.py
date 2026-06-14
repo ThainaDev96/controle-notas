@@ -111,15 +111,20 @@ class Command(BaseCommand):
     def popular_matriculas(self):
         grupo_professor = Group.objects.get(name="professor")
         alunos = list(User.objects.exclude(groups=grupo_professor).exclude(is_superuser=True))
-        turmas = list(Turma.objects.filter(ativo=True))
-
-        # Embaralha os alunos para distribuição aleatória
+        
+        nomes_turma = ["1A", "1B", "2A", "2B", "3A"]
+        
         random.shuffle(alunos)
-
+        
         for i, aluno in enumerate(alunos):
-            # Distribui ciclicamente entre as turmas disponíveis
-            turma = turmas[i % len(turmas)]
-            Matricula.objects.get_or_create(aluno=aluno, turma=turma)
+            # Escolhe o nome da turma ciclicamente
+            nome = nomes_turma[i % len(nomes_turma)]
+            
+            # Pega todas as turmas com esse nome (uma por disciplina)
+            turmas_do_aluno = Turma.objects.filter(nome=nome, ativo=True)
+            
+            for turma in turmas_do_aluno:
+                Matricula.objects.get_or_create(aluno=aluno, turma=turma)
     
     def popular_notas(self):
         disciplinas = Disciplina.objects.all()
