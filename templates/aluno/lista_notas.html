@@ -153,10 +153,10 @@
                                             <br><small class="text-muted">{{ nota.ano|default:"-" }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ nota.nota_p1|default:"-" }}</td>
-                                    <td>{{ nota.nota_t1|default:"-" }}</td>
-                                    <td>{{ nota.nota_p2|default:"-" }}</td>
-                                    <td>{{ nota.nota_t2|default:"-" }}</td>
+                                    <td>{{ nota.nota_p1|default_if_none:"-" }}</td>
+                                    <td>{{ nota.nota_t1|default_if_none:"-" }}</td>
+                                    <td>{{ nota.nota_p2|default_if_none:"-" }}</td>
+                                    <td>{{ nota.nota_t2|default_if_none:"-" }}</td>
                                     {% if nota.nota_p1 is not None and nota.nota_t1 is not None and nota.nota_p2 is not None and nota.nota_t2 is not None %}
                                         <td>{{ nota.media_final|default:"-" }}</td>
                                         <td>{% if nota.situacao == 'recuperacao' %}recuperação{% elif nota.situacao == 'cursando' %}Cursando{% else %}{{ nota.situacao }}{% endif %}</td>
