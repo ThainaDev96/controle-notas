@@ -193,6 +193,19 @@ def cadastrar_notas(request):
         ano           = request.POST.get('ano') or None
         turma         = request.POST.get('turma') or None
 
+        if not turma or not disciplina_id or not aluno_id:
+            contexto = {
+                "turmas": Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct(),
+                "disciplinas": Disciplina.objects.filter(ativo=True),
+                "alunos": User.objects.filter(groups__name='aluno'),
+                "editando": False,
+                "ano_atual": datetime.now().year,
+                "ultima_turma": request.session.get('ultima_turma', ''),
+                "ultima_disciplina": request.session.get('ultima_disciplina', ''),
+            }
+            messages.error(request, "Selecione a turma, a disciplina e o aluno antes de salvar.")
+            return render(request, "aluno/cadastrar_notas.html", contexto)
+
         if turma and disciplina_id:
             request.session['ultima_turma'] = turma
             request.session['ultima_disciplina'] = disciplina_id

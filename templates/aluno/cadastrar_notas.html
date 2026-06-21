@@ -67,7 +67,7 @@
                                 <input type="text" class="form-control" value="{{ turma_do_aluno.nome }}" readonly style="background-color: #f4f7fa;">
                                 <input type="hidden" name="turma" value="{{ turma_do_aluno.id }}">
                             {% else %}
-                                <select name="turma" id="turma" class="form-control"
+                                <select name="turma" id="turma" class="form-control" required
                                     data-turma-selecionada="{{ turma_do_aluno.id }}"
                                     data-aluno-selecionado="{{ nota.aluno.id }}">
                                     <option value="">Selecione a turma</option>
@@ -110,7 +110,7 @@
                                 <input type="text" class="form-control" name="aluno" id="aluno" value="{{ aluno_nome }}" readonly>
 
                             {% else %}
-                                <select name="aluno" class="form-control" id="aluno" class="form-control">
+                                <select name="aluno" class="form-control" id="aluno" class="form-control" required>
                                     <option value="">Selecione primeiro a turma</option>
                                  </select>
                             {% endif %}
