@@ -176,6 +176,24 @@
 }
 
 .turma-sep { color: #bbb; }
+/* Ajuste responsivo - boletim no mobile */
+@media (max-width: 768px) {
+    .card-header-boletim {
+        flex-wrap: wrap !important;
+        align-items: flex-start;
+    }
+
+    .legenda {
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        width: 100%;
+    }
+
+    .sf-row {
+        flex-wrap: wrap;
+        gap: 4px 6px;
+    }
+}
 </style>
 
 {% endblock %}

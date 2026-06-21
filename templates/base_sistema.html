@@ -132,7 +132,16 @@
                                 </li>
                             </ul>
                             {% endif %}
-
+                            <!-- SAIR - aparece só no mobile, no desktop já tem no dropdown do topo -->
+                            <div class="pcoded-navigatio-lavel d-block d-md-none">Conta</div>
+                            <ul class="pcoded-item pcoded-left-item d-block d-md-none">
+                                <li>
+                                    <a href="{% url 'logout' %}">
+                                        <span class="pcoded-micon"><i class="feather icon-log-out"></i></span>
+                                        <span class="pcoded-mtext">Sair</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </div>
                     </nav>
                     <!-- SIDEBAR END -->
