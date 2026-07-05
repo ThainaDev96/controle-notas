@@ -4,31 +4,30 @@
 ```plaintext
 projeto/
 
-├── .env                 # Variáveis de ambiente
+├── .env                 # Variáveis de ambiente/ credenciais do banco de dados
 ├── .gitignore           # Arquivos ignorados pelo git
-├── Dockerfile           # Criação da imagem do container da aplicação
-├── docker compose.yml   # Orquestração dos containers
-├── manage.py            # Utilizado para interagir com o projeto via linha de comando
-├── requirements.txt     # Dependências do projeto
-│
+├── Dockerfile           # Criação da imagem do container da aplicação, como o container da aplicação deve ser construído 
+├── docker compose.yml   # Orquestração dos containers (app + banco) 
+├── manage.py            # Permite rodar qualquer instrução do Django (migração, criar app, etc)
+├── requirements.txt     # Bibliotecas do projeto
+
 ├── core/                # Diretório principal do projeto com as configurações globais
-│   ├── __init__.py      # Torna o diretório um pacote Python
+│   ├── __init__.py      # Torna o diretório um pacote Python, permite importações entre arquivos
 │   ├── settings.py      # Configurações gerais do projeto (DB, apps, middlewares etc.)
-│   ├── urls.py          # Arquivo principal de rotas/URLs do projeto
-│   ├── asgi.py          # Configuração para servidores ASGI (WebSockets, etc.)
+│   ├── urls.py          # Arquivo principal de rotas/URLs do projeto, liga um endereço do navegador a uma função do views
+│   ├── asgi.py          # Configuração para servidores ASGI (WebSockets, etc.) 
 │   └── wsgi.py          # Configuração para servidores WSGI (produção tradicional)
 │
-└── app/
+└── app/aluno
     ├── __init__.py             
-    ├── admin.py         # Registro dos modelos para o admin do Django
-    ├── apps.py          # Configuração do app para o Django
+    ├── admin.py         # Registro dos modelos para o admin do Django, painel técnico do programador
+    ├── apps.py          # Configuração do app para o Django, registra os app aluno
     ├── models.py        # Definição das classes que representam as tabelas do banco de dados
-    ├── views.py         # Funções ou classes que retornam respostas (lógica de exibição)
-    ├── urls.py          # (opcional) Rotas específicas do app
-    ├── forms.py         # (opcional) Formulários baseados em Django Forms ou ModelForms
+    ├── views.py         # Funções que retornam respostas (lógica)
     ├── tests.py         # (opcional) Testes automatizados (usando unittest ou pytest)
     └── migrations/      # Histórico de migrações do banco de dados
         └── __init__.py
+
 ```
 
 #### Pré-requisitos
@@ -38,104 +37,74 @@ projeto/
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
 
-**Observação:** Para utizar o Docker e docker compose sem a necessidadde do comando sudo, é necessário
-conceder permissão desses comandos para o usuário Linux.
-Você pode fazer isso com os comandos abaixo:
+#### Criação inicial do projeto 
 
-##### 1. Crie um grupo `docker` caso ele não exista
-
-```console
-groupadd docker
+Instalar o Django na máquina:
+``` console
+pip install django
 ```
 
-##### 2. Adicione o usuário logado `$USER` ao grupo docker
-
-```console
-gpasswd -a $USER docker
+Criar o esqueleto do projeto:
+``` console
+django-admin startproject core .
 ```
 
-##### 3. Reinicie o `docker`
-
-```console
-service docker restart
+Criar o app principal:
+``` console
+python manage.py startapp aluno
 ```
-Após executar esses comandos, feche o terminal e abra novamente. 
-Se mesmo assim ainda não funcionar, reinicie a sua máquina.
 
+***Observações***
+Criar o requirements.txt com as bibliotecas do projeto: 
+Django
+psycopg2-binary
+gunicorn
 
-## Executando o projeto
+Criar o Dockerfile, com as instruções de como o container da aplicação deve ser construído.
 
-Se estiver executando o projeto pela primeira vez, você precisa criar o arquivo com as variáveis de ambiente. <br>
-Você pode fazer isso copiando o arquivo de exemplo, com o comando abaixo:
+Criar o .env, com as credenciais do banco (usuário, senha, nome do banco).
 ```console
 cp .env.example .env
 ```
-Em seguida, altere o valor passando 
 
+Criar o docker-compose.yml, organizando dois containers: o da aplicação (web) e o do banco (db).
+
+Ajustar o DATABASES no core/settings.py, apontando para o Postgres usando as credenciais do .env.
+
+
+## Executando o projeto
 Criar containers e subir a aplicação:
 ```console
 docker compose up --build -d
 ```
 
-Sobe o projeto:
-```console
-docker compose up
-```
-
-Para os containers do projeto:
-```console
-docker compose down
-```
-
-Atualizar estrutura do banco de dados (criar migração):
+Aplicar as tabelas no banco (criar migração):
 ```console
 docker compose exec web python manage.py makemigrations
 ```
-
 Executar as migrações:
 ```console
 docker compose exec web python manage.py migrate
 ```
 
-Criar superusuário (opcional):
+Após executar os comandos de iniciação, acesse a aplicação em http://localhost:8000.
+
+
+Subir o projeto: 
+Se o computador for reiniciado ou o Docker Desktop for fechado, os containers desligam. Para ligar de novo sem reconstruir tudo:
+
 ```console
-docker compose exec web python manage.py createsuperuser
+docker compose up
 ```
 
-Após executar os comandos de iniciação, acesse a aplicação em http://localhost:8000.
+Parar os containers do projeto: desligar os containers manualmente:
+```console
+docker compose down
+```
 
 ## Visualizando logs
 ```console
 docker compose logs -f
-```
-
-
-## Criando um novo aplicativo (app)
-```console
-docker compose exec web python3 manage.py startapp nome_do_app
-```
-
----
-
-### Comandos Django via terminal
-```console
-# Inicia o servidor local
-docker-compose exec web python manage.py runserver
-
-# Aplica migrações no banco de dados
-docker-compose exec web python manage.py migrate
-
-# Gera arquivos de migração
-docker-compose exec web python manage.py makemigrations
-
-# Cria usuário admin
-docker-compose exec web python manage.py createsuperuser
-
-# Acessa shell Python com contexto do Django
-docker-compose exec web python manage.py shell
-
-# Cria um novo app com o nome definido
-docker-compose exec web python manage.py startapp aluno
 ```
 
 ## Executando testes e populando o banco
