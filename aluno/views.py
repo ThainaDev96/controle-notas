@@ -22,6 +22,9 @@ def login_view(request):
                 return redirect("admin:index")
 
             grupos = user.groups.values_list("name", flat=True)
+            if "administrador" in grupos:
+                return redirect("gestao-dashboard")
+
             if "professor" in grupos:
                 return redirect("lista-notas")
 
@@ -391,3 +394,118 @@ def gerar_relatorio(request):
 
     c.save()
     return response
+
+def gestao_dashboard(request):
+    return render(request, "gestao/dashboard.html")
+
+def gestao_disciplinas(request):
+    # 1. Busca inicial: todas as disciplinas ativas, já trazendo o professor junto
+    disciplinas = Disciplina.objects.filter(ativo=True).select_related("professor")
+
+    # 2. Botão "Limpar filtros": apaga a memória e recarrega a página limpa
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_gestao_professor', None)
+        request.session.pop('filtro_gestao_disciplina', None)
+        return redirect('gestao-disciplinas')
+
+    # 3. Lê o que foi escolhido nos dropdowns
+    professor_id  = request.POST.get('professor', '')
+    disciplina_id = request.POST.get('disciplina', '')
+
+    # 4. Memória: se clicou em Filtrar (POST) anota na sessão; se só abriu a página (GET) relembra
+    if request.method == 'POST':
+        request.session['filtro_gestao_professor'] = professor_id
+        request.session['filtro_gestao_disciplina'] = disciplina_id
+    else:
+        professor_id  = request.session.get('filtro_gestao_professor', '')
+        disciplina_id = request.session.get('filtro_gestao_disciplina', '')
+
+    # 5. Aplica os filtros escolhidos
+    if professor_id:
+        disciplinas = disciplinas.filter(professor_id=professor_id)
+
+    if disciplina_id:
+        disciplinas = disciplinas.filter(id=disciplina_id)
+
+    # 6. Preenche os dropdowns e entrega tudo pro template
+    professores = User.objects.filter(groups__name='professor')
+    todas_disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "gestao/disciplinas_lista.html", {
+        "disciplinas":             disciplinas,
+        "professores":             professores,
+        "todas_disciplinas":       todas_disciplinas,
+        "professor_selecionado":   professor_id,
+        "disciplina_selecionada":  disciplina_id,
+    })
+
+def gestao_turmas(request):
+    turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_gestao_turma_disciplina', None)
+        request.session.pop('filtro_gestao_turma_nome', None)
+        return redirect('gestao-turmas')
+
+    disciplina_id = request.POST.get('disciplina', '')
+    turma_nome    = request.POST.get('turma', '')
+
+    if request.method == 'POST':
+        request.session['filtro_gestao_turma_disciplina'] = disciplina_id
+        request.session['filtro_gestao_turma_nome'] = turma_nome
+    else:
+        disciplina_id = request.session.get('filtro_gestao_turma_disciplina', '')
+        turma_nome    = request.session.get('filtro_gestao_turma_nome', '')
+
+    if disciplina_id:
+        turmas = turmas.filter(disciplina_id=disciplina_id)
+
+    if turma_nome:
+        turmas = turmas.filter(nome=turma_nome)
+
+    todas_disciplinas = Disciplina.objects.filter(ativo=True)
+    nomes_turmas = Turma.objects.filter(ativo=True).values_list('nome', flat=True).distinct()
+
+    return render(request, "gestao/turmas_lista.html", {
+        "turmas":                  turmas,
+        "todas_disciplinas":       todas_disciplinas,
+        "nomes_turmas":            nomes_turmas,
+        "disciplina_selecionada":  disciplina_id,
+        "turma_selecionada":       turma_nome,
+    })
+
+
+def gestao_matriculas(request):
+    matriculas = Matricula.objects.filter(ativo=True).select_related("aluno", "turma", "turma__disciplina")
+
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_gestao_mat_turma', None)
+        request.session.pop('filtro_gestao_mat_aluno', None)
+        return redirect('gestao-matriculas')
+
+    turma_id = request.POST.get('turma', '')
+    aluno_id = request.POST.get('aluno', '')
+
+    if request.method == 'POST':
+        request.session['filtro_gestao_mat_turma'] = turma_id
+        request.session['filtro_gestao_mat_aluno'] = aluno_id
+    else:
+        turma_id = request.session.get('filtro_gestao_mat_turma', '')
+        aluno_id = request.session.get('filtro_gestao_mat_aluno', '')
+
+    if turma_id:
+        matriculas = matriculas.filter(turma_id=turma_id)
+
+    if aluno_id:
+        matriculas = matriculas.filter(aluno_id=aluno_id)
+
+    todas_turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+    alunos = User.objects.filter(groups__name='aluno')
+
+    return render(request, "gestao/matriculas_lista.html", {
+        "matriculas":          matriculas,
+        "todas_turmas":        todas_turmas,
+        "alunos":              alunos,
+        "turma_selecionada":   turma_id,
+        "aluno_selecionado":   aluno_id,
+    })

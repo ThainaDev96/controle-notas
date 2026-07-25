@@ -1,0 +1,146 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Disciplinas{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
+<link rel="stylesheet" href="{% static 'assets/pages/data-table/css/buttons.dataTables.min.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Disciplinas</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CARD DE FILTROS -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-block" style="padding: 15px;">
+                <form method="POST" action="{% url 'gestao-disciplinas' %}" id="form-filtros">
+                    {% csrf_token %}
+                    <div class="row">
+
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-professor">Professor</label>
+                                <select id="filtro-professor" name="professor" class="form-control">
+                                    <option value="">Todos os professores</option>
+                                    {% for prof in professores %}
+                                        <option value="{{ prof.id }}"
+                                            {% if prof.id|stringformat:"s" == professor_selecionado %}selected{% endif %}>
+                                            {{ prof.first_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-disciplina">Disciplina</label>
+                                <select id="filtro-disciplina" name="disciplina" class="form-control">
+                                    <option value="">Todas as disciplinas</option>
+                                    {% for disc in todas_disciplinas %}
+                                        <option value="{{ disc.id }}"
+                                            {% if disc.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
+                                            {{ disc.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-group w-100">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    <i class="ti-filter"></i> Filtrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <a href="{% url 'gestao-disciplinas' %}?limpar=1" class="btn btn-secondary btn-sm">
+                                <i class="ti-close"></i> Limpar filtros
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DE FILTROS -->
+
+<!-- CARD DA TABELA -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h5 style="margin: 0;">Disciplinas cadastradas</h5>
+                <a href="#!" class="btn btn-primary">
+                    <i class="ti-plus" style="color: #fff;"></i> Nova Disciplina
+                </a>
+            </div>
+            <div class="card-block">
+                <div class="table-responsive dt-responsive">
+                    <table id="TabelaDisciplinas" class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Professor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for disciplina in disciplinas %}
+                            <tr>
+                                <td>{{ disciplina.nome }}</td>
+                                <td>{{ disciplina.professor.first_name }}</td>
+                                <td>
+                                    <a href="#!" class="btn btn-out btn-danger btn-square">
+                                        <i class="ti-trash"></i>
+                                    </a>
+                                    <a href="#!" class="btn btn-out btn-primary btn-square">
+                                        <i class="ti-pencil"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DA TABELA -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
+
+<script>
+$(document).ready(function () {
+    $('#TabelaDisciplinas').DataTable({
+        language: {
+            "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
+        }
+    });
+});
+</script>
+{% endblock %}

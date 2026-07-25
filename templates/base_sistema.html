@@ -59,6 +59,8 @@
                                         <span>
                                             {% if request.user.groups.all.0.name == 'aluno' %}
                                                 Aluno
+                                            {% elif request.user.groups.all.0.name == 'administrador' %}
+                                                Administrador
                                             {% else %}
                                                 Professor
                                             {% endif %}
@@ -96,6 +98,12 @@
                             </div>
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
+                                <li>
+                                    <a href="{% url 'gestao-dashboard' %}">
+                                        <span class="pcoded-micon"><i class="feather icon-home"></i></span>
+                                        <span class="pcoded-mtext">Painel</span>
+                                    </a>
+                                </li>
                                 <li class="pcoded-hasmenu {% block nav_notas_menu %}{% endblock %}">
                                     <a href="javascript:void(0)">
                                         <span class="pcoded-micon"><i class="feather icon-box"></i></span>
@@ -129,6 +137,43 @@
                                         <span class="pcoded-micon"><i class="ti-book"></i></span>
                                         <span class="pcoded-mtext">Boletim</span>
                                     </a>
+                                </li>
+                            </ul>
+                            {% endif %}
+                            <!-- MENU ADMINISTRADOR -->
+                            {% if request.user.groups.all.0.name == 'administrador' %}
+                            <div class="pcoded-navigatio-lavel">
+                                Olá, {{ request.user.first_name }}
+                            </div>
+                            <div class="pcoded-navigatio-lavel">Gestão</div>
+                            <ul class="pcoded-item pcoded-left-item">
+                                <li class="pcoded-hasmenu">
+                                    <a href="javascript:void(0)">
+                                        <span class="pcoded-micon"><i class="feather icon-book"></i></span>
+                                        <span class="pcoded-mtext">Acadêmico</span>
+                                    </a>
+                                    <ul class="pcoded-submenu">
+                                        <li>
+                                            <a href="{% url 'gestao-disciplinas' %}"><span class="pcoded-mtext">Disciplinas</span></a>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'gestao-turmas' %}"><span class="pcoded-mtext">Turmas</span></a>
+                                        </li>
+                                        <li>
+                                            <a href="{% url 'gestao-matriculas' %}"><span class="pcoded-mtext">Matrículas</span></a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li class="pcoded-hasmenu">
+                                    <a href="javascript:void(0)">
+                                        <span class="pcoded-micon"><i class="feather icon-users"></i></span>
+                                        <span class="pcoded-mtext">Autenticação</span>
+                                    </a>
+                                    <ul class="pcoded-submenu">
+                                        <li>
+                                            <a href="#!"><span class="pcoded-mtext">Usuários</span></a>
+                                        </li>
+                                    </ul>
                                 </li>
                             </ul>
                             {% endif %}

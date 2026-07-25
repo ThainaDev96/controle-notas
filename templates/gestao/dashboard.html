@@ -1,0 +1,14 @@
+{% extends "base_sistema.html" %}
+
+{% block title %}Gestão{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5>Painel de Gestão</h5>
+    </div>
+    <div class="card-block">
+        <p>Bem-vindo(a), {{ request.user.first_name }}! Use o menu ao lado para gerenciar disciplinas, turmas, matrículas e usuários.</p>
+    </div>
+</div>
+{% endblock %}

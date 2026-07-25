@@ -32,5 +32,9 @@ urlpatterns = [
     path('alunos-por-turma/', views.alunos_por_turma, name='alunos-por-turma'),
     path('disciplinas-por-turma/', views.disciplinas_por_turma, name='disciplinas-por-turma'), 
     path('boletim-aluno/', views.boletim_aluno, name='minhas-notas'),
-    path('relatorio/', views.gerar_relatorio, name='gerar-relatorio')
+    path('relatorio/', views.gerar_relatorio, name='gerar-relatorio'),
+    path('gestao/', views.gestao_dashboard, name='gestao-dashboard'),
+    path('gestao/disciplinas/', views.gestao_disciplinas, name='gestao-disciplinas'),
+    path('gestao/turmas/', views.gestao_turmas, name='gestao-turmas'),
+    path('gestao/matriculas/', views.gestao_matriculas, name='gestao-matriculas'),
 ]
