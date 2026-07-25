@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from aluno.models import Disciplina, Nota, Turma, Matricula
 from django.contrib.auth.models import User
 from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_POST
 from django.db.models import Min
 from datetime import datetime
 from reportlab.pdfgen import canvas
@@ -310,6 +311,47 @@ def disciplinas_por_turma(request):
     ).distinct().values('id', 'nome')
 
     return JsonResponse({'disciplinas': list(disciplinas)})
+
+@require_POST
+def editar_nota_ajax(request):
+    nota = get_object_or_404(Nota, id=request.POST.get('id'))
+    campo = request.POST.get('campo')
+    valor = request.POST.get('valor')
+
+    if campo not in {'nota_p1', 'nota_t1', 'nota_p2', 'nota_t2'}:
+        return JsonResponse({'ok': False, 'erro': 'Campo inválido'})
+
+    setattr(nota, campo, float(valor) if valor else None)
+
+    # Recalcula a média igual ao cadastro
+    notas = [n for n in [nota.nota_p1, nota.nota_p2, nota.nota_t1, nota.nota_t2] if n is not None]
+    media_final = round(sum(notas) / len(notas), 2) if len(notas) == 4 else None
+
+    # Situação automática pela média
+    if media_final is None:
+        situacao = 'cursando'
+    elif media_final >= 7:
+        situacao = 'aprovado'
+    elif media_final >= 5:
+        situacao = 'recuperacao'
+    else:
+        situacao = 'reprovado'
+
+    nota.media_final = media_final
+    nota.situacao = situacao
+    nota.save()
+
+    situacao_display = {
+        'cursando': 'Cursando',
+        'aprovado': 'Aprovado',
+        'recuperacao': 'Recuperação',
+        'reprovado': 'Reprovado',
+    }
+    return JsonResponse({
+        'ok': True,
+        'media_final': nota.media_final,
+        'situacao': situacao_display.get(situacao, situacao)
+    })
 
 def gerar_relatorio(request):
     response = HttpResponse(content_type='application/pdf')

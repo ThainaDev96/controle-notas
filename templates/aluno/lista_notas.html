@@ -153,16 +153,16 @@
                                             <br><small class="text-muted">{{ nota.ano|default:"-" }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ nota.nota_p1|default_if_none:"-" }}</td>
-                                    <td>{{ nota.nota_t1|default_if_none:"-" }}</td>
-                                    <td>{{ nota.nota_p2|default_if_none:"-" }}</td>
-                                    <td>{{ nota.nota_t2|default_if_none:"-" }}</td>
+                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_p1">{{ nota.nota_p1|default_if_none:"" }}</td>
+                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_t1">{{ nota.nota_t1|default_if_none:"" }}</td>
+                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_p2">{{ nota.nota_p2|default_if_none:"" }}</td>
+                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_t2">{{ nota.nota_t2|default_if_none:"" }}</td>
                                     {% if nota.nota_p1 is not None and nota.nota_t1 is not None and nota.nota_p2 is not None and nota.nota_t2 is not None %}
-                                        <td>{{ nota.media_final|default:"-" }}</td>
-                                        <td>{% if nota.situacao == 'recuperacao' %}recuperação{% elif nota.situacao == 'cursando' %}Cursando{% else %}{{ nota.situacao }}{% endif %}</td>
+                                        <td class="col-mf">{{ nota.media_final|default:"-" }}</td>
+                                        <td class="col-situacao">{% if nota.situacao == 'recuperacao' %}Recuperação{% elif nota.situacao == 'cursando' %}Cursando{% else %}{{ nota.situacao }}{% endif %}</td>
                                     {% else %}
-                                        <td>-</td>
-                                        <td>Cursando</td>
+                                        <td class="col-mf">-</td>
+                                        <td class="col-situacao">Cursando</td>
                                     {% endif %}
                                     <td>
                                         <a href="#" class="btn btn-out btn-danger btn-square btn-deletar"
@@ -249,6 +249,22 @@ $(document).on('click', '.btn-deletar', function (e) {
 });
 });
     
+$(document).on('blur', '.editavel', function () {
+    const $td = $(this);
+    $.post("{% url 'editar-nota-ajax' %}", {
+        id: $td.data('id'),
+        campo: $td.data('campo'),
+        valor: $td.text().trim(),
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+    }, function (resp) {
+        if (resp.ok) {
+            $td.closest('tr').find('.col-mf').text(resp.media_final ?? '-');
+            $td.closest('tr').find('.col-situacao').text(resp.situacao);
+        } else {
+            alert(resp.erro);
+        }
+    });
+});
 
 </script>
 {% endblock %}
