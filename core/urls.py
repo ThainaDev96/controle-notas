@@ -38,4 +38,6 @@ urlpatterns = [
     path('gestao/turmas/', views.gestao_turmas, name='gestao-turmas'),
     path('gestao/matriculas/', views.gestao_matriculas, name='gestao-matriculas'),
     path('notas/editar-ajax/', views.editar_nota_ajax, name='editar-nota-ajax'),
+    path("disciplina/editar/<int:id>/", views.editar_disciplina, name="editar-disciplina")
+    
 ]

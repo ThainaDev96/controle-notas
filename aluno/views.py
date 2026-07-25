@@ -481,6 +481,23 @@ def gestao_disciplinas(request):
         "disciplina_selecionada":  disciplina_id,
     })
 
+def editar_disciplina(request, id):
+    disciplina = get_object_or_404(Disciplina, id=id)
+
+    if request.method == "POST":
+        disciplina.nome = request.POST.get("nome")
+        disciplina.professor_id = request.POST.get("professor")
+        disciplina.save()
+        messages.success(request, "Disciplina editada com sucesso!")
+        return redirect("gestao-disciplinas")
+
+    professores = User.objects.filter(groups__name='professor')
+
+    return render(request, "gestao/editar_disciplina.html", {
+        "disciplina": disciplina,
+        "professores": professores,
+    })
+
 def gestao_turmas(request):
     turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
 
