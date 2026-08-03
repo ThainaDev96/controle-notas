@@ -38,6 +38,13 @@ urlpatterns = [
     path('gestao/turmas/', views.gestao_turmas, name='gestao-turmas'),
     path('gestao/matriculas/', views.gestao_matriculas, name='gestao-matriculas'),
     path('notas/editar-ajax/', views.editar_nota_ajax, name='editar-nota-ajax'),
-    path("disciplina/editar/<int:id>/", views.editar_disciplina, name="editar-disciplina")
-    
+    path("disciplina/editar/<int:id>/", views.editar_disciplina, name="editar-disciplina"),
+    path("disciplina/cadastrar/", views.cadastrar_disciplina, name="cadastrar-disciplina"),
+    path("disciplina/deletar/<int:id>/", views.deletar_disciplina, name="deletar-disciplina"),
+    path("turma/cadastrar/", views.cadastrar_turma, name="cadastrar-turma"),
+    path("turma/editar/<int:id>/", views.editar_turma, name="editar-turma"),
+    path("turma/deletar/<int:id>/", views.deletar_turma, name="deletar-turma"),
+    path("matricula/cadastrar/", views.cadastrar_matricula, name="cadastrar-matricula"),
+    path("matricula/editar/<int:id>/", views.editar_matricula, name="editar-matricula"),
+    path("matricula/deletar/<int:id>/", views.deletar_matricula, name="deletar-matricula"),
 ]

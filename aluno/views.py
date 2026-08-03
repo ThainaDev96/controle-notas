@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from aluno.models import Disciplina, Nota, Turma, Matricula
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Min
@@ -481,6 +481,35 @@ def gestao_disciplinas(request):
         "disciplina_selecionada":  disciplina_id,
     })
 
+def cadastrar_disciplina(request):
+    if request.method == 'POST':
+        nome = request.POST.get('nome')
+        professor_id = request.POST.get('professor')
+
+        if not nome or not professor_id:
+            messages.error(request, "Preencha o nome e selecione o professor antes de salvar.")
+            return render(request, "gestao/cadastrar_disciplina.html", {
+                "professores": User.objects.filter(groups__name='professor'),
+                "nome": nome,
+            })
+
+        Disciplina.objects.create(nome=nome, professor_id=professor_id)
+        messages.success(request, "Disciplina cadastrada com sucesso!")
+        return redirect("gestao-disciplinas")
+
+    professores = User.objects.filter(groups__name='professor')
+
+    return render(request, "gestao/cadastrar_disciplina.html", {
+        "professores": professores,
+    })
+
+def deletar_disciplina(request, id):
+    disciplina = get_object_or_404(Disciplina, id=id)
+    disciplina.ativo = False
+    disciplina.save()
+    messages.success(request, "Disciplina excluída com sucesso!")
+    return redirect("gestao-disciplinas")
+
 def editar_disciplina(request, id):
     disciplina = get_object_or_404(Disciplina, id=id)
 
@@ -533,6 +562,110 @@ def gestao_turmas(request):
         "turma_selecionada":       turma_nome,
     })
 
+
+def cadastrar_turma(request):
+    if request.method == 'POST':
+        nome = request.POST.get('nome')
+        disciplina_id = request.POST.get('disciplina')
+
+        if not nome or not disciplina_id:
+            messages.error(request, "Preencha o nome e selecione a disciplina antes de salvar.")
+            return render(request, "gestao/cadastrar_turma.html", {
+                "disciplinas": Disciplina.objects.filter(ativo=True),
+                "nome": nome,
+            })
+
+        Turma.objects.create(nome=nome, disciplina_id=disciplina_id)
+        messages.success(request, "Turma cadastrada com sucesso!")
+        return redirect("gestao-turmas")
+
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "gestao/cadastrar_turma.html", {
+        "disciplinas": disciplinas,
+    })
+
+def deletar_turma(request, id):
+    turma = get_object_or_404(Turma, id=id)
+    turma.ativo = False
+    turma.save()
+    messages.success(request, "Turma excluída com sucesso!")
+    return redirect("gestao-turmas")
+
+def editar_turma(request, id):
+    turma = get_object_or_404(Turma, id=id)
+
+    if request.method == "POST":
+        turma.nome = request.POST.get("nome")
+        turma.disciplina_id = request.POST.get("disciplina")
+        turma.save()
+        messages.success(request, "Turma editada com sucesso!")
+        return redirect("gestao-turmas")
+
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "gestao/editar_turma.html", {
+        "turma": turma,
+        "disciplinas": disciplinas,
+    })
+
+def cadastrar_matricula(request):
+    if request.method == 'POST':
+        aluno_id = request.POST.get('aluno')
+        turma_id = request.POST.get('turma')
+
+        if not aluno_id or not turma_id:
+            messages.error(request, "Selecione o aluno e a turma antes de salvar.")
+            return render(request, "gestao/cadastrar_matricula.html", {
+                "alunos": User.objects.filter(groups__name='aluno'),
+                "turmas": Turma.objects.filter(ativo=True).select_related("disciplina"),
+            })
+
+        existe_matricula = Matricula.objects.filter(aluno_id=aluno_id, turma_id=turma_id, ativo=True).first()
+        if existe_matricula:
+            messages.error(request, "Esse aluno já está matriculado nessa turma!")
+            return render(request, "gestao/cadastrar_matricula.html", {
+                "alunos": User.objects.filter(groups__name='aluno'),
+                "turmas": Turma.objects.filter(ativo=True).select_related("disciplina"),
+            })
+
+        Matricula.objects.create(aluno_id=aluno_id, turma_id=turma_id)
+        messages.success(request, "Matrícula cadastrada com sucesso!")
+        return redirect("gestao-matriculas")
+
+    alunos = User.objects.filter(groups__name='aluno')
+    turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+
+    return render(request, "gestao/cadastrar_matricula.html", {
+        "alunos": alunos,
+        "turmas": turmas,
+    })
+
+def deletar_matricula(request, id):
+    matricula = get_object_or_404(Matricula, id=id)
+    matricula.ativo = False
+    matricula.save()
+    messages.success(request, "Matrícula excluída com sucesso!")
+    return redirect("gestao-matriculas")
+
+def editar_matricula(request, id):
+    matricula = get_object_or_404(Matricula, id=id)
+
+    if request.method == "POST":
+        matricula.aluno_id = request.POST.get("aluno")
+        matricula.turma_id = request.POST.get("turma")
+        matricula.save()
+        messages.success(request, "Matrícula editada com sucesso!")
+        return redirect("gestao-matriculas")
+
+    alunos = User.objects.filter(groups__name='aluno')
+    turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+
+    return render(request, "gestao/editar_matricula.html", {
+        "matricula": matricula,
+        "alunos": alunos,
+        "turmas": turmas,
+    })
 
 def gestao_matriculas(request):
     matriculas = Matricula.objects.filter(ativo=True).select_related("aluno", "turma", "turma__disciplina")

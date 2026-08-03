@@ -1,7 +1,7 @@
 {% extends "base_sistema.html" %}
 {% load static %}
 
-{% block title %}Editar Disciplina{% endblock %}
+{% block title %}Cadastrar Disciplina{% endblock %}
 {% block nav_academico_menu %}pcoded-trigger{% endblock %}
 {% block nav_gestao_disciplinas %}active{% endblock %}
 
@@ -11,7 +11,7 @@
         <div class="col-lg-8">
             <div class="page-header-title">
                 <div class="d-inline">
-                    <h4>Edição de Disciplina</h4>
+                    <h4>Cadastro de Disciplina</h4>
                 </div>
             </div>
         </div>
@@ -22,18 +22,18 @@
     <div class="col-sm-12">
         <div class="card">
             <div class="card-header">
-                <h5>Editar Disciplina</h5>
+                <h5>Cadastrar Disciplina</h5>
             </div>
 
             <div class="card-block">
-                <form method="post" action="{% url 'editar-disciplina' disciplina.id %}">
+                <form method="post" action="{% url 'cadastrar-disciplina' %}">
                     {% csrf_token %}
                     <!-- NOME -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Nome</label>
                         <div class="col-sm-10">
                             <input type="text" class="form-control" name="nome"
-                                value="{{ disciplina.nome }}" placeholder="Nome da disciplina" required>
+                                value="{{ nome|default:'' }}" placeholder="Nome da disciplina" required>
                         </div>
                     </div>
 
@@ -44,7 +44,7 @@
                             <select name="professor" class="form-control" required>
                                 <option value="">Selecione o professor</option>
                                 {% for prof in professores %}
-                                    <option value="{{ prof.id }}" {% if prof.id == disciplina.professor_id %}selected{% endif %}>
+                                    <option value="{{ prof.id }}">
                                         {{ prof.first_name }}
                                     </option>
                                 {% endfor %}

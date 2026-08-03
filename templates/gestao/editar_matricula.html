@@ -1,0 +1,71 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Editar Matrícula{% endblock %}
+{% block nav_academico_menu %}pcoded-trigger{% endblock %}
+{% block nav_gestao_matriculas %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Edição de Matrícula</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Editar Matrícula</h5>
+            </div>
+
+            <div class="card-block">
+                <form method="post" action="{% url 'editar-matricula' matricula.id %}">
+                    {% csrf_token %}
+                    <!-- ALUNO -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Aluno</label>
+                        <div class="col-sm-10">
+                            <select name="aluno" class="form-control" required>
+                                <option value="">Selecione o aluno</option>
+                                {% for aluno in alunos %}
+                                    <option value="{{ aluno.id }}" {% if aluno.id == matricula.aluno_id %}selected{% endif %}>
+                                        {{ aluno.first_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- TURMA -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Turma</label>
+                        <div class="col-sm-10">
+                            <select name="turma" class="form-control" required>
+                                <option value="">Selecione a turma</option>
+                                {% for turma in turmas %}
+                                    <option value="{{ turma.id }}" {% if turma.id == matricula.turma_id %}selected{% endif %}>
+                                        {{ turma.nome }} - {{ turma.disciplina.nome }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- BOTÕES -->
+                    <div>
+                        <a href="{% url 'gestao-matriculas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
+                        <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                    </div>
+                </form>
+            </div><!-- card-block -->
+        </div><!-- card -->
+    </div>
+</div>
+{% endblock %}

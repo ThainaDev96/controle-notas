@@ -2,6 +2,8 @@
 {% load static %}
 
 {% block title %}Matrículas{% endblock %}
+{% block nav_academico_menu %}pcoded-trigger{% endblock %}
+{% block nav_gestao_matriculas %}active{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
@@ -89,7 +91,7 @@
         <div class="card">
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h5 style="margin: 0;">Matrículas cadastradas</h5>
-                <a href="#!" class="btn btn-primary">
+                <a href="{% url 'cadastrar-matricula' %}" class="btn btn-primary">
                     <i class="ti-plus" style="color: #fff;"></i> Nova Matrícula
                 </a>
             </div>
@@ -113,10 +115,11 @@
                                 <td>{{ matricula.turma.nome }}</td>
                                 <td>{{ matricula.turma.disciplina.nome }}</td>
                                 <td>
-                                    <a href="#!" class="btn btn-out btn-danger btn-square">
-                                        <i class="ti-trash"></i>
+                                    <a href="#" class="btn btn-out btn-danger btn-square btn-deletar"
+                                        data-id="{{ matricula.id }}"
+                                        data-nome="{{ matricula.aluno.first_name }} - {{ matricula.turma.nome }}"><i class="ti-trash"></i>
                                     </a>
-                                    <a href="#!" class="btn btn-out btn-primary btn-square">
+                                    <a href="{% url 'editar-matricula' matricula.id %}" class="btn btn-out btn-primary btn-square">
                                         <i class="ti-pencil"></i>
                                     </a>
                                 </td>
@@ -130,6 +133,27 @@
     </div>
 </div>
 <!-- FIM CARD DA TABELA -->
+
+<!-- Modal de Confirmação -->
+<div class="modal fade" id="modalDeletar" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Tem certeza que deseja excluir a matrícula de <strong id="nome-matricula-modal"></strong>?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <a href="#" id="btn-confirmar-deletar" class="btn btn-danger">Sim, excluir</a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -144,6 +168,18 @@ $(document).ready(function () {
         language: {
             "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
         }
+    });
+
+    // Modal de confirmação de exclusão
+    $(document).on('click', '.btn-deletar', function (e) {
+        e.preventDefault();
+        const id   = $(this).data('id');
+        const nome = $(this).data('nome');
+        const url  = "{% url 'deletar-matricula' 0 %}".replace('0', id);
+
+        $('#nome-matricula-modal').text(nome);
+        $('#btn-confirmar-deletar').attr('href', url);
+        $('#modalDeletar').modal('show');
     });
 });
 </script>
