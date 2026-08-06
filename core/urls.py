@@ -47,4 +47,8 @@ urlpatterns = [
     path("matricula/cadastrar/", views.cadastrar_matricula, name="cadastrar-matricula"),
     path("matricula/editar/<int:id>/", views.editar_matricula, name="editar-matricula"),
     path("matricula/deletar/<int:id>/", views.deletar_matricula, name="deletar-matricula"),
+    path("gestao/usuarios/", views.gestao_usuarios, name="gestao-usuarios"),
+    path("usuario/cadastrar/", views.cadastrar_usuario, name="cadastrar-usuario"),
+    path("usuario/editar/<int:id>/", views.editar_usuario, name="editar-usuario"),
+    path("usuario/deletar/<int:id>/", views.deletar_usuario, name="deletar-usuario"),
 ]

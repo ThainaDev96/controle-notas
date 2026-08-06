@@ -1,0 +1,169 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Usuários{% endblock %}
+{% block nav_autenticacao_menu %}pcoded-trigger{% endblock %}
+{% block nav_gestao_usuarios %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
+<link rel="stylesheet" href="{% static 'assets/pages/data-table/css/buttons.dataTables.min.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Usuários</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CARD DE FILTROS -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-block" style="padding: 15px;">
+                <form method="POST" action="{% url 'gestao-usuarios' %}" id="form-filtros">
+                    {% csrf_token %}
+                    <div class="row">
+
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="filtro-grupo">Perfil</label>
+                                <select id="filtro-grupo" name="grupo" class="form-control">
+                                    <option value="">Todos os perfis</option>
+                                    {% for grupo in grupos %}
+                                        <option value="{{ grupo.name }}"
+                                            {% if grupo.name == grupo_selecionado %}selected{% endif %}>
+                                            {{ grupo.name|title }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-group w-100">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    <i class="ti-filter"></i> Filtrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <a href="{% url 'gestao-usuarios' %}?limpar=1" class="btn btn-secondary btn-sm">
+                                <i class="ti-close"></i> Limpar filtros
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DE FILTROS -->
+
+<!-- CARD DA TABELA -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h5 style="margin: 0;">Usuários cadastrados</h5>
+                <a href="{% url 'cadastrar-usuario' %}" class="btn btn-primary">
+                    <i class="ti-plus" style="color: #fff;"></i> Novo Usuário
+                </a>
+            </div>
+            <div class="card-block">
+                <div class="table-responsive dt-responsive">
+                    <table id="TabelaUsuarios" class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Usuário</th>
+                                <th>Nome</th>
+                                <th>Perfil</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usuario in usuarios %}
+                            <tr>
+                                <td>{{ usuario.username }}</td>
+                                <td>{{ usuario.first_name }}</td>
+                                <td>{{ usuario.groups.first.name|title }}</td>
+                                <td>
+                                    <a href="#" class="btn btn-out btn-danger btn-square btn-deletar"
+                                        data-id="{{ usuario.id }}"
+                                        data-nome="{{ usuario.first_name }}"><i class="ti-trash"></i>
+                                    </a>
+                                    <a href="{% url 'editar-usuario' usuario.id %}" class="btn btn-out btn-primary btn-square">
+                                        <i class="ti-pencil"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DA TABELA -->
+
+<!-- Modal de Confirmação -->
+<div class="modal fade" id="modalDeletar" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Tem certeza que deseja excluir o usuário <strong id="nome-usuario-modal"></strong>?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <a href="#" id="btn-confirmar-deletar" class="btn btn-danger">Sim, excluir</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
+
+<script>
+$(document).ready(function () {
+    $('#TabelaUsuarios').DataTable({
+        language: {
+            "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
+        }
+    });
+
+    // Modal de confirmação de exclusão
+    $(document).on('click', '.btn-deletar', function (e) {
+        e.preventDefault();
+        const id   = $(this).data('id');
+        const nome = $(this).data('nome');
+        const url  = "{% url 'deletar-usuario' 0 %}".replace('0', id);
+
+        $('#nome-usuario-modal').text(nome);
+        $('#btn-confirmar-deletar').attr('href', url);
+        $('#modalDeletar').modal('show');
+    });
+});
+</script>
+{% endblock %}

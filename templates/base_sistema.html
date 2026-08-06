@@ -164,14 +164,14 @@
                                         </li>
                                     </ul>
                                 </li>
-                                <li class="pcoded-hasmenu">
+                                <li class="pcoded-hasmenu {% block nav_autenticacao_menu %}{% endblock %}">
                                     <a href="javascript:void(0)">
                                         <span class="pcoded-micon"><i class="feather icon-users"></i></span>
                                         <span class="pcoded-mtext">Autenticação</span>
                                     </a>
                                     <ul class="pcoded-submenu">
-                                        <li>
-                                            <a href="#!"><span class="pcoded-mtext">Usuários</span></a>
+                                        <li class="{% block nav_gestao_usuarios %}{% endblock %}">
+                                            <a href="{% url 'gestao-usuarios' %}"><span class="pcoded-mtext">Usuários</span></a>
                                         </li>
                                     </ul>
                                 </li>

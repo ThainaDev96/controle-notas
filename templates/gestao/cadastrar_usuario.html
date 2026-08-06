@@ -1,0 +1,83 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Cadastrar Usuário{% endblock %}
+{% block nav_autenticacao_menu %}pcoded-trigger{% endblock %}
+{% block nav_gestao_usuarios %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Cadastro de Usuário</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Cadastrar Usuário</h5>
+            </div>
+
+            <div class="card-block">
+                <form method="post" action="{% url 'cadastrar-usuario' %}">
+                    {% csrf_token %}
+                    <!-- USUÁRIO -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Usuário</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" name="username"
+                                placeholder="Nome de usuário (matrícula/login)" required>
+                        </div>
+                    </div>
+
+                    <!-- NOME -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Nome</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" name="first_name"
+                                placeholder="Nome completo" required>
+                        </div>
+                    </div>
+
+                    <!-- SENHA -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Senha</label>
+                        <div class="col-sm-10">
+                            <input type="password" class="form-control" name="password"
+                                placeholder="Senha de acesso" required>
+                        </div>
+                    </div>
+
+                    <!-- PERFIL -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Perfil</label>
+                        <div class="col-sm-10">
+                            <select name="grupo" class="form-control" required>
+                                <option value="">Selecione o perfil</option>
+                                {% for grupo in grupos %}
+                                    <option value="{{ grupo.name }}">
+                                        {{ grupo.name|title }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- BOTÕES -->
+                    <div>
+                        <a href="{% url 'gestao-usuarios' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
+                        <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                    </div>
+                </form>
+            </div><!-- card-block -->
+        </div><!-- card -->
+    </div>
+</div>
+{% endblock %}

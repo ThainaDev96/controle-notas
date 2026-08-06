@@ -701,3 +701,91 @@ def gestao_matriculas(request):
         "turma_selecionada":   turma_id,
         "aluno_selecionado":   aluno_id,
     })
+
+def gestao_usuarios(request):
+    usuarios = User.objects.filter(is_active=True, is_superuser=False, groups__isnull=False).prefetch_related("groups").distinct()
+
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_gestao_usuario_grupo', None)
+        return redirect('gestao-usuarios')
+
+    grupo_nome = request.POST.get('grupo', '')
+
+    if request.method == 'POST':
+        request.session['filtro_gestao_usuario_grupo'] = grupo_nome
+    else:
+        grupo_nome = request.session.get('filtro_gestao_usuario_grupo', '')
+
+    if grupo_nome:
+        usuarios = usuarios.filter(groups__name=grupo_nome)
+
+    grupos = Group.objects.filter(name__in=['aluno', 'professor', 'administrador'])
+
+    return render(request, "gestao/usuarios_lista.html", {
+        "usuarios":          usuarios,
+        "grupos":            grupos,
+        "grupo_selecionado": grupo_nome,
+    })
+
+def cadastrar_usuario(request):
+    grupos = Group.objects.filter(name__in=['aluno', 'professor', 'administrador'])
+
+    if request.method == 'POST':
+        username   = request.POST.get('username')
+        first_name = request.POST.get('first_name')
+        password   = request.POST.get('password')
+        grupo_nome = request.POST.get('grupo')
+
+        if not username or not first_name or not password or not grupo_nome:
+            messages.error(request, "Preencha todos os campos antes de salvar.")
+            return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "Já existe um usuário com esse nome de usuário!")
+            return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+
+        usuario = User.objects.create(username=username, first_name=first_name)
+        usuario.set_password(password)
+        usuario.save()
+        usuario.groups.add(Group.objects.get(name=grupo_nome))
+
+        messages.success(request, "Usuário cadastrado com sucesso!")
+        return redirect("gestao-usuarios")
+
+    return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+
+def deletar_usuario(request, id):
+    usuario = get_object_or_404(User, id=id)
+    usuario.is_active = False
+    usuario.save()
+    messages.success(request, "Usuário excluído com sucesso!")
+    return redirect("gestao-usuarios")
+
+def editar_usuario(request, id):
+    usuario = get_object_or_404(User, id=id)
+    grupos = Group.objects.filter(name__in=['aluno', 'professor', 'administrador'])
+
+    if request.method == "POST":
+        usuario.username = request.POST.get("username")
+        usuario.first_name = request.POST.get("first_name")
+
+        password = request.POST.get("password")
+        if password:
+            usuario.set_password(password)
+
+        usuario.save()
+
+        grupo_nome = request.POST.get("grupo")
+        usuario.groups.clear()
+        usuario.groups.add(Group.objects.get(name=grupo_nome))
+
+        messages.success(request, "Usuário editado com sucesso!")
+        return redirect("gestao-usuarios")
+
+    grupo_atual = usuario.groups.first()
+
+    return render(request, "gestao/editar_usuario.html", {
+        "usuario":     usuario,
+        "grupos":      grupos,
+        "grupo_atual": grupo_atual,
+    })
