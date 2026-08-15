@@ -17,7 +17,23 @@
     <link rel="stylesheet" href="{% static 'assets/icon/icofont/css/icofont.css' %}">
     <link rel="stylesheet" href="{% static 'assets/css/style.css' %}">
     <link rel="stylesheet" href="{% static 'assets/css/jquery.mCustomScrollbar.css' %}">
-
+<style>
+    .acoes-disciplina {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .icone-acao {
+        display: inline-flex;
+        color: #1B3D93 !important;
+    }
+    .icone-acao i {
+        font-size: 20px;
+    }
+    .icone-acao:hover {
+        opacity: 0.7;
+    }
+</style>
     {% block extra_css %}{% endblock %}
 </head>
 
@@ -238,6 +254,7 @@
     <script src="{% static 'assets/js/vartical-layout.min.js' %}"></script>
     <script src="{% static 'assets/js/jquery.mCustomScrollbar.concat.min.js' %}"></script>
     <script src="{% static 'assets/js/script.js' %}"></script>
+    <script src="{% static 'js/acoes-tabela.js' %}"></script>
 
     <script> 
     document.addEventListener("DOMContentLoaded", function () {

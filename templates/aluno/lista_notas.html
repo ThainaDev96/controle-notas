@@ -165,13 +165,9 @@
                                         <td class="col-situacao">Cursando</td>
                                     {% endif %}
                                     <td>
-                                        <a href="#" class="btn btn-out btn-danger btn-square btn-deletar"
-                                        data-id="{{ nota.id }}"
-                                        data-nome="{{ nota.aluno.first_name }}"><i class="ti-trash"></i>
-                                        </a>
-                                        <a href="{% url 'editar-nota' nota.id %}" class="btn btn-out btn-primary btn-square">
-                                            <i class="ti-pencil"></i>
-                                        </a>
+                                        {% url 'editar-nota' nota.id as url_editar %}
+                                        {% url 'deletar-nota' nota.id as url_deletar %}
+                                        {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=nota.aluno.first_name %}
                                     </td>
                                 </tr>
                             {% empty %}
@@ -189,25 +185,7 @@
     </div>
 </div>
 <!-- Modal de Confirmação -->
-<div class="modal fade" id="modalDeletar" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Confirmar Exclusão</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                Tem certeza que deseja excluir a nota de <strong id="nome-aluno-modal"></strong>?
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <a href="#" id="btn-confirmar-deletar" class="btn btn-danger">Sim, excluir</a>
-            </div>
-        </div>
-    </div>
-</div>
+{% include "partials/modal-confirmar-exclusao.html" %}
 {% endblock %}
 
 {% block extra_js %}
@@ -216,6 +194,7 @@
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
 <script src="{% static 'assets/pages/data-table/js/data-table-custom.js' %}"></script>
+<script src="{% static 'js/acoes-tabela.js' %}"></script>
 
 <script>
 $(document).ready(function () {
@@ -235,18 +214,7 @@ $(document).ready(function () {
 
     $('#btn-limpar').on('click', function () {
         window.location.href = "{% url 'lista-notas' %}?limpar=1";
-});
-// Modal de confirmação de exclusão
-$(document).on('click', '.btn-deletar', function (e) {
-    e.preventDefault();
-    const id   = $(this).data('id');
-    const nome = $(this).data('nome');
-    const url  = "{% url 'deletar-nota' 0 %}".replace('0', id);
-
-    $('#nome-aluno-modal').text(nome);
-    $('#btn-confirmar-deletar').attr('href', url);
-    $('#modalDeletar').modal('show');
-});
+    });
 });
     
 $(document).on('blur', '.editavel', function () {
