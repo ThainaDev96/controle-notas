@@ -62,24 +62,24 @@ TEMPLATES = [
 # Banco de dados
 
 # Configuração DB Docker
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("POSTGRES_DB"),
-        "USER": config("POSTGRES_USER"),
-        "PASSWORD": config("POSTGRES_PASSWORD"),
-        "HOST": config("POSTGRES_HOST"),
-        "PORT": config("POSTGRES_PORT"),
-    }
-}
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.postgresql",
+#         "NAME": config("POSTGRES_DB"),
+#         "USER": config("POSTGRES_USER"),
+#         "PASSWORD": config("POSTGRES_PASSWORD"),
+#         "HOST": config("POSTGRES_HOST"),
+#         "PORT": config("POSTGRES_PORT"),
+#     }
+# }
 
 # Configuração DB RailWay
-# DATABASES = {
-#     "default": dj_database_url.config(
-#         default=config('DATABASE_URL'),
-#         conn_max_age=600,
-#     )
-# }
+DATABASES = {
+    "default": dj_database_url.config(
+        default=config('DATABASE_URL'),
+        conn_max_age=600,
+    )
+}
 # Tipo padrão de chave primária
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
