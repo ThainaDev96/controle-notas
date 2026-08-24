@@ -184,6 +184,7 @@
         </div>
     </div>
 </div>
+
 <!-- Modal de Confirmação -->
 {% include "partials/modal-confirmar-exclusao.html" %}
 {% endblock %}
@@ -216,7 +217,7 @@ $(document).ready(function () {
         window.location.href = "{% url 'lista-notas' %}?limpar=1";
     });
 });
-    
+
 $(document).on('blur', '.editavel', function () {
     const $td = $(this);
     $.post("{% url 'editar-nota-ajax' %}", {

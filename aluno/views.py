@@ -45,7 +45,7 @@ def listar_disciplinas(request):
 
 def lista_notas(request):
     notas = Nota.objects.filter(ativo=True).select_related('aluno', 'disciplina').prefetch_related('aluno__turmas')# Busca as notas com os dados em uma única query
-    
+
      # Limpa sessão e redireciona sem filtro
     if request.GET.get('limpar'):
         request.session.pop('filtro_turma', None)
@@ -112,7 +112,7 @@ def boletim_aluno(request):
     total_recuperacao = notas.filter(situacao='recuperacao').count()
     reprovadas = notas.filter(situacao='reprovado').count()
     total_cursando = notas.filter(situacao='cursando').count()
-    
+
     todas_lancadas = total_cursando == 0
     if not todas_lancadas or notas.count() == 0 or total_recuperacao > 0:
         situacao_final = 'em_andamento'
@@ -128,7 +128,7 @@ def boletim_aluno(request):
         "anos":            anos,
         "ano_selecionado": ano_selecionado,
         "situacao_final":  situacao_final,
-        "ano_atual":       datetime.now().year,   
+        "ano_atual":       datetime.now().year,
         "total_aprovadas":   total_aprovadas,
         "total_recuperacao": total_recuperacao,
         "total_reprovadas":  reprovadas,
@@ -144,7 +144,7 @@ def deletar_nota(request, id):
 
 def editar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
-    
+
     if request.method == "POST":
         ##nota.aluno_id = request.POST.get("aluno")
         nota.disciplina_id = request.POST.get("disciplina")
@@ -216,7 +216,7 @@ def cadastrar_notas(request):
 
         # Não deixa criar um registro duplicado
         existe_nota = Nota.objects.filter(
-            aluno=aluno_id, 
+            aluno=aluno_id,
             disciplina=disciplina_id,
             ano=ano
         ).first()
@@ -259,7 +259,7 @@ def cadastrar_notas(request):
         )
 
         turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
-        alunos = User.objects.filter(groups__name='aluno') 
+        alunos = User.objects.filter(groups__name='aluno')
         disciplinas = Disciplina.objects.filter(ativo=True)
 
         messages.success(request, 'Nota cadastrada com sucesso!')
@@ -274,7 +274,7 @@ def cadastrar_notas(request):
         })
 
     turmas = Turma.objects.filter(ativo=True).values('nome').annotate(id=Min('id')).distinct()
-    alunos = User.objects.filter(groups__name='aluno') 
+    alunos = User.objects.filter(groups__name='aluno')
     disciplinas = Disciplina.objects.filter(ativo=True)
 
     return render(request, 'aluno/cadastrar_notas.html', {
@@ -413,7 +413,7 @@ def gerar_relatorio(request):
     total_reprovadas = notas.filter(situacao='reprovado').count()
     total_aprovadas = notas.filter(situacao='aprovado').count()
     total_recuperacao = notas.filter(situacao='recuperacao').count()
-    
+
     todas_lancadas = total_cursando == 0
     if not todas_lancadas or notas.count() == 0 or total_recuperacao > 0:
         situacao_final = 'Em andamento'

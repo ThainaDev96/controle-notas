@@ -55,7 +55,7 @@
                             <input type="number"
                                 class="form-control"
                                 name="ano"
-                                value="{% if editando %}{{ nota.ano }}{% else %}{{ ano_atual }}{% endif %}" 
+                                value="{% if editando %}{{ nota.ano }}{% else %}{{ ano_atual }}{% endif %}"
                                 placeholder="Digite o ano" readonly>
                         </div>
                     </div>
@@ -105,7 +105,7 @@
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Aluno</label>
                         <div class="col-sm-10">
-                            
+
                             {% if editando %}
                                 <input type="text" class="form-control" name="aluno" id="aluno" value="{{ aluno_nome }}" readonly>
 

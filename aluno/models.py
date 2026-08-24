@@ -56,7 +56,7 @@ class Nota(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     ano = models.PositiveIntegerField(verbose_name="Ano", null=True)
-    
+
     # def __str__(self):
     #     return self.aluno
 
@@ -65,3 +65,20 @@ class Nota(models.Model):
 def vincular_aluno_turma(sender, instance, created, **kwargs):
     if created:
         instance.turma.alunos.add(instance.aluno)
+
+
+class Avaliacao(models.Model):
+    nome = models.CharField(max_length=50, verbose_name="Nome")
+    tipo = models.CharField(choices=[
+            ("prova", "Prova"),
+            ("trabalho", "Trabalho"),
+            ("atividade_aula", "Atividade em aula"),
+        ], verbose_name="Tipo", default="prova")
+    valor = models.FloatField(verbose_name="valor", null=True, blank=True)
+    disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
+
+
+class NotaAvaliacao(models.Model):
+    aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
+    avaliacao = models.ForeignKey(Avaliacao, on_delete=models.CASCADE, verbose_name="Avaliação")
+    nota = models.FloatField(verbose_name="Nota", null=True, blank=True)
