@@ -39,6 +39,55 @@
         opacity: 0.7;
     }
 </style>
+
+<style>
+    /* Menu lateral inteiro no tom claro, com texto escuro */
+    .pcoded-navbar,
+    .pcoded-navbar .pcoded-inner-navbar {
+        background-color: #F0F0F0 !important;
+    }
+    #pcoded .pcoded-navbar .pcoded-mtext,
+    #pcoded .pcoded-navbar .pcoded-micon,
+    #pcoded .pcoded-navbar .pcoded-navigatio-lavel,
+    #pcoded .pcoded-navbar a {
+        color: #333333 !important;
+    }
+
+    /* Fundo da ramificação aberta (ex: "Alunos" > Listar/Cadastrar) no mesmo tom claro */
+    #pcoded .pcoded-navbar .pcoded-trigger > a,
+    #pcoded .pcoded-navbar .pcoded-trigger.active > a,
+    #pcoded .pcoded-navbar .pcoded-submenu,
+    #pcoded .pcoded-navbar .pcoded-submenu li.active > a {
+        background-color: #F3F3F3 !important;
+    }
+    #pcoded .pcoded-navbar .pcoded-submenu a {
+        color: #333333 !important;
+    }
+
+    /* Cor ao passar o mouse - só no item exato embaixo do cursor, nunca no "pai" dele */
+    #pcoded .pcoded-navbar .pcoded-item > li:hover:not(:has(.pcoded-submenu:hover)) > a,
+    #pcoded .pcoded-navbar .pcoded-submenu li:hover > a {
+        background-color: #03458F !important;
+        color: #FFFFFF !important;
+    }
+    #pcoded .pcoded-navbar .pcoded-item > li:hover:not(:has(.pcoded-submenu:hover)) > a .pcoded-micon,
+    #pcoded .pcoded-navbar .pcoded-item > li:hover:not(:has(.pcoded-submenu:hover)) > a .pcoded-mtext,
+    #pcoded .pcoded-navbar .pcoded-submenu li:hover > a .pcoded-micon,
+    #pcoded .pcoded-navbar .pcoded-submenu li:hover > a .pcoded-mtext {
+        color: #FFFFFF !important;
+    }
+
+    /* Caixinha do logo, no cabeçalho */
+    .navbar-logo {
+        background-color: #03458F !important;
+    }
+
+    /* Botões "Filtrar" (dentro do conteúdo, não mexe no botão "Entrar" do login) */
+    .pcoded-content .btn-primary.btn-block {
+        background-color: #03458F !important;
+        border-color: #03458F !important;
+    }
+</style>
     {% block extra_css %}{% endblock %}
 </head>
 
