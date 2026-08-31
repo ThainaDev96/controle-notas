@@ -190,10 +190,15 @@
                                                 <span class="pcoded-mtext">Cadastrar</span>
                                             </a>
                                         </li>
+                                        <li class="{% block nav_configurar_avaliacoes %}{% endblock %}">
+                                            <a href="{% url 'configurar-avaliacoes' %}">
+                                                <span class="pcoded-mtext">Configurar Avaliações</span>
+                                            </a>
+                                        </li>
                                     </ul>
                                 </li>
                             </ul>
-                            {% endif %} 
+                            {% endif %}
 
                             <!-- MENU ALUNO -->
                             {% if request.user.groups.all.0.name == 'aluno' %}

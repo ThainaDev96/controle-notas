@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
-from aluno.models import Disciplina, Nota, Turma, Matricula
+from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao
 from django.contrib.auth.models import User, Group
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
@@ -81,7 +81,7 @@ def lista_notas(request):
     disciplinas = Disciplina.objects.filter(ativo=True)
     anos = Nota.objects.filter(ativo=True, ano__isnull=False).values_list('ano', flat=True).distinct().order_by('-ano')
 
-    return render(request, "aluno/lista_notas.html", {
+    return render(request, "professor/lista_notas.html", {
         "notas":                  notas,
         "turmas":                 turmas,
         "disciplinas":            disciplinas,
@@ -177,7 +177,7 @@ def editar_nota(request, id):
 
     aluno_nome = User.objects.filter(id=nota.aluno_id).first()
 
-    return render(request, "aluno/cadastrar_notas.html", {
+    return render(request, "professor/cadastrar_notas.html", {
         'aluno_nome': aluno_nome.first_name,
         "turmas": turmas,
         "disciplinas": disciplinas,
@@ -208,7 +208,7 @@ def cadastrar_notas(request):
                 "ultima_disciplina": request.session.get('ultima_disciplina', ''),
             }
             messages.error(request, "Selecione a turma, a disciplina e o aluno antes de salvar.")
-            return render(request, "aluno/cadastrar_notas.html", contexto)
+            return render(request, "professor/cadastrar_notas.html", contexto)
 
         if turma and disciplina_id:
             request.session['ultima_turma'] = turma
@@ -230,7 +230,7 @@ def cadastrar_notas(request):
                 "ultima_disciplina": request.session.get('ultima_disciplina', ''),
             }
             messages.error(request, "Esse aluno já possui um registro para essa disciplina nesse ano!")
-            return render(request, "aluno/cadastrar_notas.html", contexto)
+            return render(request, "professor/cadastrar_notas.html", contexto)
 
         # Calcula a média
         notas = [float(n) for n in [nota_p1, nota_p2, nota_t1, nota_t2] if n]
@@ -263,7 +263,7 @@ def cadastrar_notas(request):
         disciplinas = Disciplina.objects.filter(ativo=True)
 
         messages.success(request, 'Nota cadastrada com sucesso!')
-        return render(request, 'aluno/cadastrar_notas.html', {
+        return render(request, 'professor/cadastrar_notas.html', {
             'turmas': turmas,
             'alunos': alunos,
             'disciplinas': disciplinas,
@@ -277,12 +277,135 @@ def cadastrar_notas(request):
     alunos = User.objects.filter(groups__name='aluno')
     disciplinas = Disciplina.objects.filter(ativo=True)
 
-    return render(request, 'aluno/cadastrar_notas.html', {
+    return render(request, 'professor/cadastrar_notas.html', {
         'turmas': turmas,
         'alunos': alunos,
         'disciplinas': disciplinas,
         "editando": False,
         "ano_atual": datetime.now().year,
+    })
+
+def configurar_avaliacoes(request):
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_avaliacao_disciplina', None)
+        return redirect('configurar-avaliacoes')
+
+    disciplina_id = request.POST.get('disciplina', '')
+
+    if request.method == 'POST':
+        request.session['filtro_avaliacao_disciplina'] = disciplina_id
+    else:
+        disciplina_id = request.session.get('filtro_avaliacao_disciplina', '')
+
+    if disciplina_id:
+        avaliacoes = Avaliacao.objects.select_related('disciplina').filter(disciplina_id=disciplina_id)
+    else:
+        avaliacoes = Avaliacao.objects.none()
+
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, 'professor/configurar_avaliacoes.html', {
+        'avaliacoes': avaliacoes,
+        'disciplinas': disciplinas,
+        'disciplina_selecionada': disciplina_id,
+    })
+
+def cadastrar_avaliacao(request):
+    if request.method == 'POST':
+        nome = request.POST.get('nome')
+        tipo = request.POST.get('tipo')
+        valor = request.POST.get('valor') or None
+        disciplina_id = request.POST.get('disciplina')
+
+        if not nome or not disciplina_id:
+            messages.error(request, "Preencha o nome e selecione a disciplina antes de salvar.")
+            return render(request, "professor/cadastrar_avaliacao.html", {
+                "disciplinas": Disciplina.objects.filter(ativo=True),
+                "nome": nome,
+                "tipo": tipo,
+                "valor": valor,
+            })
+
+        Avaliacao.objects.create(nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id)
+        messages.success(request, "Avaliação cadastrada com sucesso!")
+        return redirect("configurar-avaliacoes")
+
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "professor/cadastrar_avaliacao.html", {
+        "disciplinas": disciplinas,
+    })
+
+def editar_avaliacao(request, id):
+    avaliacao = get_object_or_404(Avaliacao, id=id)
+
+    if request.method == "POST":
+        avaliacao.nome = request.POST.get("nome")
+        avaliacao.tipo = request.POST.get("tipo")
+        avaliacao.valor = request.POST.get("valor") or None
+        avaliacao.disciplina_id = request.POST.get("disciplina")
+        avaliacao.save()
+        messages.success(request, "Avaliação editada com sucesso!")
+        return redirect("configurar-avaliacoes")
+
+    disciplinas = Disciplina.objects.filter(ativo=True)
+
+    return render(request, "professor/editar_avaliacao.html", {
+        "avaliacao": avaliacao,
+        "disciplinas": disciplinas,
+    })
+
+def deletar_avaliacao(request, id):
+    avaliacao = get_object_or_404(Avaliacao, id=id)
+    avaliacao.delete()
+    messages.success(request, "Avaliação excluída com sucesso!")
+    return redirect("configurar-avaliacoes")
+
+@require_POST
+def cadastrar_avaliacao_ajax(request):
+    nome = request.POST.get('nome')
+    tipo = request.POST.get('tipo') or 'prova'
+    valor = request.POST.get('valor') or None
+    disciplina_id = request.POST.get('disciplina')
+
+    if not nome or not disciplina_id:
+        return JsonResponse({'ok': False, 'erro': 'Informe o nome e a disciplina antes de salvar.'})
+
+    avaliacao = Avaliacao.objects.create(
+        nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'id': avaliacao.id,
+        'nome': avaliacao.nome,
+        'tipo': avaliacao.tipo,
+        'tipo_display': avaliacao.get_tipo_display(),
+        'valor': avaliacao.valor,
+        'disciplina_nome': avaliacao.disciplina.nome,
+    })
+
+@require_POST
+def editar_avaliacao_ajax(request):
+    avaliacao = get_object_or_404(Avaliacao, id=request.POST.get('id'))
+    campo = request.POST.get('campo')
+    valor = request.POST.get('valor')
+
+    if campo not in {'nome', 'tipo', 'valor'}:
+        return JsonResponse({'ok': False, 'erro': 'Campo inválido'})
+
+    if campo == 'valor':
+        setattr(avaliacao, campo, float(valor) if valor else None)
+    else:
+        if not valor:
+            return JsonResponse({'ok': False, 'erro': 'Esse campo não pode ficar vazio'})
+        setattr(avaliacao, campo, valor)
+
+    avaliacao.save()
+
+    return JsonResponse({
+        'ok': True,
+        'tipo_display': avaliacao.get_tipo_display(),
     })
 
 def alunos_por_turma(request):

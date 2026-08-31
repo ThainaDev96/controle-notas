@@ -51,4 +51,10 @@ urlpatterns = [
     path("usuario/cadastrar/", views.cadastrar_usuario, name="cadastrar-usuario"),
     path("usuario/editar/<int:id>/", views.editar_usuario, name="editar-usuario"),
     path("usuario/deletar/<int:id>/", views.deletar_usuario, name="deletar-usuario"),
+    path("professor/configurar_avaliacoes/", views.configurar_avaliacoes, name="configurar-avaliacoes"),
+    path("avaliacao/cadastrar/", views.cadastrar_avaliacao, name="cadastrar-avaliacao"),
+    path("avaliacao/editar/<int:id>/", views.editar_avaliacao, name="editar-avaliacao"),
+    path("avaliacao/deletar/<int:id>/", views.deletar_avaliacao, name="deletar-avaliacao"),
+    path("avaliacao/cadastrar-ajax/", views.cadastrar_avaliacao_ajax, name="cadastrar-avaliacao-ajax"),
+    path("avaliacao/editar-ajax/", views.editar_avaliacao_ajax, name="editar-avaliacao-ajax"),
 ]

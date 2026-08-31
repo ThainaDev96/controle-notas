@@ -1,0 +1,356 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Avaliações{% endblock %}
+{% block nav_notas_menu %}pcoded-trigger{% endblock %}
+{% block nav_configurar_avaliacoes %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
+<link rel="stylesheet" href="{% static 'assets/pages/data-table/css/buttons.dataTables.min.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css' %}">
+<style>
+#TabelaAvaliacoes .col-tipo {
+    width: 150px;
+}
+.tipo-dropdown-toggle {
+    width: 100%;
+    display: block;
+    text-align: left;
+    background-color: transparent;
+    border: none;
+    padding: 6px 22px 6px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333333;
+    cursor: pointer;
+}
+.tipo-dropdown-toggle:hover,
+.tipo-dropdown-toggle:focus {
+    background-color: #F3F3F3;
+    outline: none;
+    box-shadow: none;
+}
+.tipo-dropdown-toggle::after {
+    border-top-color: #1B3D93;
+    float: right;
+    margin-top: 8px;
+}
+.tipo-dropdown-menu {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    min-width: 170px;
+}
+.tipo-dropdown-menu .tipo-dropdown-item {
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 14px;
+    color: #333333;
+}
+.tipo-dropdown-menu .tipo-dropdown-item:hover,
+.tipo-dropdown-menu .tipo-dropdown-item:focus {
+    background-color: #03458F;
+    color: #FFFFFF;
+}
+.tipo-dropdown-menu .tipo-dropdown-item.active {
+    background-color: #1B3D93;
+    color: #FFFFFF;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Avaliações</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CARD DE FILTROS -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-block" style="padding: 15px;">
+                <form method="POST" action="{% url 'configurar-avaliacoes' %}" id="form-filtros">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="filtro-disciplina">Disciplina</label>
+                                <select id="filtro-disciplina" name="disciplina" class="form-control" required>
+                                    <option value="">Selecione a disciplina</option>
+                                    {% for disciplina in disciplinas %}
+                                        <option value="{{ disciplina.id }}"
+                                            {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
+                                            {{ disciplina.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-group w-100">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    <i class="ti-filter"></i> Filtrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <a href="{% url 'configurar-avaliacoes' %}?limpar=1" class="btn btn-secondary btn-sm">
+                                <i class="ti-close"></i> Limpar filtros
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DE FILTROS -->
+
+<!-- CARD DA TABELA -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h5 style="margin: 0;">Avaliações cadastradas</h5>
+                {% if disciplina_selecionada %}
+                <button type="button" id="btn-nova-avaliacao" class="btn btn-primary">
+                    <i class="ti-plus" style="color: #fff;"></i> Nova Avaliação
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-block">
+                {% if disciplina_selecionada %}
+                <div class="table-responsive dt-responsive">
+                    <table id="TabelaAvaliacoes" class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th class="col-tipo">Tipo</th>
+                                <th>Peso (%)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for avaliacao in avaliacoes %}
+                            <tr>
+                                <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="nome">{{ avaliacao.nome }}</td>
+                                <td>
+                                    <div class="dropdown">
+                                        <button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-id="{{ avaliacao.id }}" data-valor="{{ avaliacao.tipo }}" aria-haspopup="true" aria-expanded="false">{{ avaliacao.get_tipo_display }}</button>
+                                        <div class="dropdown-menu tipo-dropdown-menu">
+                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'prova' %}active{% endif %}" data-valor="prova">Prova</a>
+                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'trabalho' %}active{% endif %}" data-valor="trabalho">Trabalho</a>
+                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'atividade_aula' %}active{% endif %}" data-valor="atividade_aula">Atividade em aula</a>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="valor">{{ avaliacao.valor|default_if_none:"" }}</td>
+                                <td>
+                                    {% url 'deletar-avaliacao' avaliacao.id as url_deletar %}
+                                    <div class="acoes-disciplina">
+                                        <a href="#" class="icone-acao btn-deletar" data-url="{{ url_deletar }}" data-nome="{{ avaliacao.nome }}" title="Excluir">
+                                            <i class="ti-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr id="linha-vazia-avaliacoes">
+                                <td colspan="4">Nenhuma avaliação encontrada</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                    <i class="ti-filter" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Selecione a disciplina para ver as avaliações cadastradas</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DA TABELA -->
+
+<!-- Modal de Confirmação -->
+{% include "partials/modal-confirmar-exclusao.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
+<script src="{% static 'js/acoes-tabela.js' %}"></script>
+
+<script>
+var URL_DELETAR_AVALIACAO_TPL = "{% url 'deletar-avaliacao' 0 %}";
+
+$(document).ready(function () {
+    var table = $('#TabelaAvaliacoes').DataTable({
+        language: {
+            "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
+        }
+    });
+
+    function garantirLinhaVazia() {
+        if (table.rows().count() === 0 && !$('#linha-vazia-avaliacoes').length) {
+            table.row.add($('<tr id="linha-vazia-avaliacoes"><td colspan="4">Nenhuma avaliação encontrada</td></tr>')).draw(false);
+        }
+    }
+
+    function removerLinhaVazia() {
+        if ($('#linha-vazia-avaliacoes').length) {
+            table.row($('#linha-vazia-avaliacoes')).remove().draw(false);
+        }
+    }
+
+    $('#btn-nova-avaliacao').on('click', function () {
+        if ($('#linha-nova-avaliacao').length) return;
+        removerLinhaVazia();
+
+        var linhaHtml =
+            '<td><input type="text" class="form-control form-control-sm" id="novo-av-nome" placeholder="Nome"></td>' +
+            '<td>' +
+                '<div class="dropdown">' +
+                    '<button type="button" class="tipo-dropdown-toggle dropdown-toggle" id="novo-av-tipo" data-toggle="dropdown" data-boundary="window" data-valor="prova" aria-haspopup="true" aria-expanded="false">Prova</button>' +
+                    '<div class="dropdown-menu tipo-dropdown-menu">' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item active" data-valor="prova">Prova</a>' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item" data-valor="trabalho">Trabalho</a>' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item" data-valor="atividade_aula">Atividade em aula</a>' +
+                    '</div>' +
+                '</div>' +
+            '</td>' +
+            '<td><input type="number" step="0.01" class="form-control form-control-sm" id="novo-av-valor" placeholder="Peso (%)"></td>' +
+            '<td>' +
+                '<div class="acoes-disciplina">' +
+                    '<a href="#" class="icone-acao" id="btn-salvar-nova-avaliacao" title="Salvar"><i class="ti-check"></i></a>' +
+                    '<a href="#" class="icone-acao" id="btn-cancelar-nova-avaliacao" title="Cancelar"><i class="ti-close"></i></a>' +
+                '</div>' +
+            '</td>';
+
+        table.row.add($('<tr id="linha-nova-avaliacao"></tr>').html(linhaHtml)).draw(false);
+        $('#novo-av-nome').focus();
+    });
+
+    $(document).on('click', '#btn-cancelar-nova-avaliacao', function (e) {
+        e.preventDefault();
+        table.row($('#linha-nova-avaliacao')).remove().draw(false);
+        garantirLinhaVazia();
+    });
+
+    $(document).on('click', '#btn-salvar-nova-avaliacao', function (e) {
+        e.preventDefault();
+
+        var nome = $('#novo-av-nome').val().trim();
+        var tipo = $('#novo-av-tipo').data('valor');
+        var valor = $('#novo-av-valor').val();
+
+        if (!nome) {
+            alert('Informe o nome da avaliação.');
+            return;
+        }
+
+        $.post("{% url 'cadastrar-avaliacao-ajax' %}", {
+            nome: nome,
+            tipo: tipo,
+            valor: valor,
+            disciplina: "{{ disciplina_selecionada }}",
+            csrfmiddlewaretoken: '{{ csrf_token }}'
+        }, function (resp) {
+            if (!resp.ok) {
+                alert(resp.erro);
+                return;
+            }
+
+            table.row($('#linha-nova-avaliacao')).remove();
+
+            var acoesHtml =
+                '<div class="acoes-disciplina">' +
+                    '<a href="#" class="icone-acao btn-deletar" data-url="' + URL_DELETAR_AVALIACAO_TPL.replace('0', resp.id) + '" data-nome="' + resp.nome + '" title="Excluir"><i class="ti-trash"></i></a>' +
+                '</div>';
+
+            var linhaHtml =
+                '<td contenteditable="true" class="editavel-avaliacao" data-id="' + resp.id + '" data-campo="nome">' + resp.nome + '</td>' +
+                '<td>' +
+                    '<div class="dropdown">' +
+                        '<button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-id="' + resp.id + '" data-valor="' + resp.tipo + '" aria-haspopup="true" aria-expanded="false">' + resp.tipo_display + '</button>' +
+                        '<div class="dropdown-menu tipo-dropdown-menu">' +
+                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'prova' ? ' active' : '') + '" data-valor="prova">Prova</a>' +
+                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'trabalho' ? ' active' : '') + '" data-valor="trabalho">Trabalho</a>' +
+                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'atividade_aula' ? ' active' : '') + '" data-valor="atividade_aula">Atividade em aula</a>' +
+                        '</div>' +
+                    '</div>' +
+                '</td>' +
+                '<td contenteditable="true" class="editavel-avaliacao" data-id="' + resp.id + '" data-campo="valor">' + (resp.valor !== null ? resp.valor : '') + '</td>' +
+                '<td>' + acoesHtml + '</td>';
+
+            table.row.add($('<tr></tr>').html(linhaHtml)).draw(false);
+        });
+    });
+});
+
+$(document).on('blur', '.editavel-avaliacao', function () {
+    var $td = $(this);
+    $.post("{% url 'editar-avaliacao-ajax' %}", {
+        id: $td.data('id'),
+        campo: $td.data('campo'),
+        valor: $td.text().trim(),
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+    }, function (resp) {
+        if (!resp.ok) {
+            alert(resp.erro);
+        }
+    });
+});
+
+$(document).on('click', '.tipo-dropdown-item', function (e) {
+    e.preventDefault();
+    var $item = $(this);
+    var $menu = $item.closest('.dropdown-menu');
+    var $toggle = $menu.siblings('.tipo-dropdown-toggle');
+    var valor = $item.data('valor');
+    var id = $toggle.data('id');
+
+    $toggle.text($item.text().trim());
+    $toggle.attr('data-valor', valor);
+    $menu.find('.tipo-dropdown-item').removeClass('active');
+    $item.addClass('active');
+
+    if (!id) return;
+
+    $.post("{% url 'editar-avaliacao-ajax' %}", {
+        id: id,
+        campo: 'tipo',
+        valor: valor,
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+    }, function (resp) {
+        if (!resp.ok) {
+            alert(resp.erro);
+        }
+    });
+});
+
+$('.table-responsive').on('show.bs.dropdown', function () {
+    $(this).css('overflow', 'inherit');
+});
+$('.table-responsive').on('hide.bs.dropdown', function () {
+    $(this).css('overflow', 'auto');
+});
+</script>
+{% endblock %}
