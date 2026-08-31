@@ -20,6 +20,11 @@
     padding-left: 5px;
     padding-right: 5px;
 }
+
+.form-group label i {
+    color: #1B3D93;
+    margin-right: 4px;
+}
 </style>
 
 {% endblock %}
@@ -48,45 +53,34 @@
 
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="filtro-ano">Ano</label>
-                                <select id="filtro-ano" name="ano" class="form-control">
-                                    <option value="">Todos os anos</option>
-                                    {% for ano in anos %}
-                                        <option value="{{ ano }}"
-                                            {% if ano|stringformat:"s" == ano_selecionado %}selected{% endif %}>
-                                            {{ ano }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="filtro-turma">Turma</label>
-                                <select id="filtro-turma" name="turma" class="form-control">
-                                    <option value="">Todas as turmas</option>
-                                    {% for turma in turmas %}
-                                        <option value="{{ turma }}"
-                                            {% if turma == turma_selecionada %}selected{% endif %}>
-                                            {{ turma }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="filtro-disciplina">Disciplina</label>
-                                <select id="filtro-disciplina" name="disciplina" class="form-control">
-                                    <option value="">Todas as disciplinas</option>
+                                <label for="filtro-disciplina"><i class="ti-book"></i>Disciplina</label>
+                                <select id="filtro-disciplina" name="disciplina" class="form-control" required>
+                                    <option value="">Selecione a disciplina</option>
                                     {% for disciplina in disciplinas %}
                                         <option value="{{ disciplina.id }}"
                                             {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
                                             {{ disciplina.nome }}
                                         </option>
                                     {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-turma"><i class="ti-user"></i>Turma</label>
+                                <select id="filtro-turma" name="turma" class="form-control" required {% if not disciplina_selecionada %}disabled{% endif %}>
+                                    {% if disciplina_selecionada %}
+                                        <option value="">Selecione a turma</option>
+                                        {% for turma in turmas %}
+                                            <option value="{{ turma.id }}"
+                                                {% if turma.id|stringformat:"s" == turma_selecionada %}selected{% endif %}>
+                                                {{ turma.nome }}
+                                            </option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="">Selecione a disciplina primeiro</option>
+                                    {% endif %}
                                 </select>
                             </div>
                         </div>
@@ -101,9 +95,9 @@
                     </div>
                     <div class="row mt-2">
                         <div class="col-md-12">
-                            <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar">
+                            <a href="{% url 'lista-notas' %}?limpar=1" class="btn btn-secondary btn-sm">
                                 <i class="ti-close"></i> Limpar filtros
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </form>
@@ -113,24 +107,34 @@
         <div class="card">
 
             <div class="card-header">
-                <h5>Notas dos Alunos {{ ano_selecionado }}</h5>
+                <h5>Notas dos Alunos</h5>
                 <div class="card-header-right">
                     <i class="icofont icofont-spinner-alt-5"></i>
                 </div>
             </div>
 
             <div class="card-block">
+                {% if not disciplina_selecionada or not turma_selecionada %}
+                <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                    <i class="ti-filter" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Selecione a disciplina e a turma para ver as notas</p>
+                </div>
+                {% elif sem_avaliacoes %}
+                <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                    <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
+                    <a href="{% url 'configurar-avaliacoes' %}" class="btn btn-primary btn-sm mt-2">Ir para Configurar Avaliações</a>
+                </div>
+                {% else %}
                 <div class="table-responsive dt-responsive">
                     <table id="TabelaNotas" class="table table-striped table-bordered">
                         <thead>
                             <tr>
                                 <th>Matrícula</th>
                                 <th>Nome</th>
-                                <th>Disciplina</th>
-                                <th>P1</th>
-                                <th>T1</th>
-                                <th>P2</th>
-                                <th>T2</th>
+                                {% for avaliacao in avaliacoes %}
+                                    <th>{{ avaliacao.nome }}</th>
+                                {% endfor %}
                                 <th>MF</th>
                                 <th>Situação</th>
                                 <th>Ações</th>
@@ -138,47 +142,31 @@
                         </thead>
 
                         <tbody>
-                            {% for nota in notas %}
+                            {% for item in alunos_notas %}
                                 <tr>
-                                    <td>{{ nota.aluno.username }}</td>
+                                    <td>{{ item.aluno.username }}</td>
+                                    <td>{{ item.aluno.first_name }}</td>
+                                    {% for n in item.notas %}
+                                        <td contenteditable="true" class="editavel" data-aluno="{{ item.aluno.id }}" data-avaliacao="{{ n.avaliacao_id }}">{{ n.valor|default_if_none:"" }}</td>
+                                    {% endfor %}
+                                    <td class="col-mf">{{ item.media_final|default:"-" }}</td>
+                                    <td class="col-situacao">{{ item.situacao_display }}</td>
                                     <td>
-                                        {{ nota.aluno.first_name }}
-                                        {% if not turma_selecionada %}
-                                            <br><small class="text-muted">{{ nota.aluno.turmas.first.nome|default:"-" }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {{ nota.disciplina }}
-                                        {% if not ano_selecionado %}
-                                            <br><small class="text-muted">{{ nota.ano|default:"-" }}</small>
-                                        {% endif %}
-                                    </td>
-                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_p1">{{ nota.nota_p1|default_if_none:"" }}</td>
-                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_t1">{{ nota.nota_t1|default_if_none:"" }}</td>
-                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_p2">{{ nota.nota_p2|default_if_none:"" }}</td>
-                                    <td contenteditable="true" class="editavel" data-id="{{ nota.id }}" data-campo="nota_t2">{{ nota.nota_t2|default_if_none:"" }}</td>
-                                    {% if nota.nota_p1 is not None and nota.nota_t1 is not None and nota.nota_p2 is not None and nota.nota_t2 is not None %}
-                                        <td class="col-mf">{{ nota.media_final|default:"-" }}</td>
-                                        <td class="col-situacao">{% if nota.situacao == 'recuperacao' %}Recuperação{% elif nota.situacao == 'cursando' %}Cursando{% else %}{{ nota.situacao }}{% endif %}</td>
-                                    {% else %}
-                                        <td class="col-mf">-</td>
-                                        <td class="col-situacao">Cursando</td>
-                                    {% endif %}
-                                    <td>
-                                        {% url 'editar-nota' nota.id as url_editar %}
-                                        {% url 'deletar-nota' nota.id as url_deletar %}
-                                        {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=nota.aluno.first_name %}
+                                        {% url 'editar-nota' item.nota_id as url_editar %}
+                                        {% url 'deletar-nota' item.nota_id as url_deletar %}
+                                        {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=item.aluno.first_name %}
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="9">Nenhuma nota encontrada</td>
+                                    <td colspan="{{ avaliacoes|length|add:5 }}">Nenhum aluno matriculado nessa turma</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
 
                     </table>
                 </div>
+                {% endif %}
             </div>
 
         </div>
@@ -194,35 +182,39 @@
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
-<script src="{% static 'assets/pages/data-table/js/data-table-custom.js' %}"></script>
 <script src="{% static 'js/acoes-tabela.js' %}"></script>
 
 <script>
 $(document).ready(function () {
-    $('#filtro-turma').on('change', function () {
-        const turma = $(this).val();
-        const $disc = $('#filtro-disciplina');
-
-        $disc.html('<option value="">Todas as disciplinas</option>');
-        if (!turma) return;
-
-        $.get("{% url 'disciplinas-por-turma' %}", { turma: turma }, function (data) {
-            data.disciplinas.forEach(function (d) {
-                $disc.append(`<option value="${d.id}">${d.nome}</option>`);
-            });
-        });
+    $('#TabelaNotas').DataTable({
+        language: {
+            "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
+        }
     });
 
-    $('#btn-limpar').on('click', function () {
-        window.location.href = "{% url 'lista-notas' %}?limpar=1";
+    $('#filtro-disciplina').on('change', function () {
+        var disciplina = $(this).val();
+        var $turma = $('#filtro-turma');
+
+        if (!disciplina) {
+            $turma.prop('disabled', true).html('<option value="">Selecione a disciplina primeiro</option>');
+            return;
+        }
+
+        $.get("{% url 'turmas-por-disciplina' %}", { disciplina: disciplina }, function (data) {
+            $turma.prop('disabled', false).html('<option value="">Selecione a turma</option>');
+            data.turmas.forEach(function (t) {
+                $turma.append('<option value="' + t.id + '">' + t.nome + '</option>');
+            });
+        });
     });
 });
 
 $(document).on('blur', '.editavel', function () {
     const $td = $(this);
-    $.post("{% url 'editar-nota-ajax' %}", {
-        id: $td.data('id'),
-        campo: $td.data('campo'),
+    $.post("{% url 'editar-nota-avaliacao-ajax' %}", {
+        aluno: $td.data('aluno'),
+        avaliacao: $td.data('avaliacao'),
         valor: $td.text().trim(),
         csrfmiddlewaretoken: '{{ csrf_token }}'
     }, function (resp) {

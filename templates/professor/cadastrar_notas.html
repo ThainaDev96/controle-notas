@@ -11,6 +11,15 @@
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
 {% block nav_cadastrar_notas %}active{% endblock %}
 
+{% block extra_css %}
+<style>
+.form-group label i {
+    color: #1B3D93;
+    margin-right: 4px;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
 <!-- Page-header start -->
@@ -46,157 +55,189 @@
             </div>
 
             <div class="card-block">
-                <form method="post" action="{% if editando %}{% url 'editar-nota' nota.pk %}{% else %}{% url 'cadastrar-notas' %}{% endif %}">
-                    {% csrf_token %}
-                    <!-- Ano -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Ano</label>
-                        <div class="col-sm-10">
-                            <input type="number"
-                                class="form-control"
-                                name="ano"
-                                value="{% if editando %}{{ nota.ano }}{% else %}{{ ano_atual }}{% endif %}"
-                                placeholder="Digite o ano" readonly>
+                {% if editando %}
+                    {% if sem_avaliacoes %}
+                        <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                            <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                            <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn btn-primary btn-sm mt-2">Ir para Configurar Avaliações</a>
                         </div>
-                    </div>
-                    <!-- TURMA -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Turma</label>
-                        <div class="col-sm-10">
-                            {% if editando %}
-                                <input type="text" class="form-control" value="{{ turma_do_aluno.nome }}" readonly style="background-color: #f4f7fa;">
-                                <input type="hidden" name="turma" value="{{ turma_do_aluno.id }}">
-                            {% else %}
-                                <select name="turma" id="turma" class="form-control" required
-                                    data-turma-selecionada="{{ turma_do_aluno.id }}"
-                                    data-aluno-selecionado="{{ nota.aluno.id }}">
-                                    <option value="">Selecione a turma</option>
-                                    {% for turma in turmas %}
-                                        <option value="{{ turma.id }}"
-                                            {% if ultima_turma == turma.id|stringformat:"s" %}selected{% endif %}>
-                                            {{ turma.nome }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            {% endif %}
+                    {% else %}
+                        <form method="post" action="{% url 'editar-nota' nota.pk %}">
+                            {% csrf_token %}
+                            <!-- TURMA -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Turma</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" value="{{ turma_do_aluno.nome }}" readonly style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
+                            <!-- DISCIPLINA -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Disciplina</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" value="{{ nota.disciplina.nome }}" readonly style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
+                            <!-- ALUNO -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Aluno</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" value="{{ aluno_nome }}" readonly style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
+
+                            <!-- AVALIAÇÕES DINÂMICAS -->
+                            {% for item in avaliacoes_com_nota %}
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">{{ item.avaliacao.nome }}</label>
+                                <div class="col-sm-10">
+                                    <input type="number" step="0.1" min="0" max="10"
+                                        class="form-control nota-campo"
+                                        data-peso="{{ item.avaliacao.valor|default:0 }}"
+                                        name="nota_avaliacao_{{ item.avaliacao.id }}"
+                                        value="{{ item.valor|floatformat:1 }}"
+                                        placeholder="0.0 – 10.0">
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <!-- MÉDIA FINAL -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Média Final</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" id="media_final"
+                                        value="{{ nota.media_final|floatformat:1 }}"
+                                        placeholder="Calculada automaticamente"
+                                        readonly style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
+
+                            <!-- SITUAÇÃO -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Situação</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" id="situacao"
+                                        placeholder="Definida automaticamente" readonly
+                                        style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
+
+                            <!-- BOTÕES -->
+                            <div>
+                                <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
+                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                            </div>
+                        </form>
+                    {% endif %}
+
+                {% else %}
+                    {% if not disciplina_selecionada or not turma_selecionada %}
+                        <!-- ETAPA 1: ESCOLHER DISCIPLINA E TURMA -->
+                        <form method="post" action="{% url 'cadastrar-notas' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="acao" value="selecionar_turma">
+
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label"><i class="ti-book"></i>Disciplina</label>
+                                <div class="col-sm-10">
+                                    <select id="gate-disciplina" name="disciplina" class="form-control" required>
+                                        <option value="">Selecione a disciplina</option>
+                                        {% for disciplina in disciplinas %}
+                                            <option value="{{ disciplina.id }}">{{ disciplina.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label"><i class="ti-user"></i>Turma</label>
+                                <div class="col-sm-10">
+                                    <select id="gate-turma" name="turma" class="form-control" required disabled>
+                                        <option value="">Selecione a disciplina primeiro</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Continuar</button>
+                            </div>
+                        </form>
+                    {% elif sem_avaliacoes %}
+                        <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                            <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                            <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn btn-primary btn-sm mt-2">Ir para Configurar Avaliações</a>
                         </div>
-                    </div>
-                    <!-- DISCIPLINA -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Disciplina</label>
-                        <div class="col-sm-10">
-                            {% if editando %}
-                                <input type="text" class="form-control" value="{{ nota.disciplina.nome }}" readonly style="background-color: #f4f7fa;">
-                                <input type="hidden" name="disciplina" value="{{ nota.disciplina.id }}">
-                            {% else %}
-                                <select name="disciplina" class="form-control" required>
-                                    <option value="">Selecione</option>
-                                    {% for disciplina in disciplinas %}
-                                        <option value="{{ disciplina.id }}"
-                                            {% if ultima_disciplina == disciplina.id|stringformat:"s" %}selected{% endif %}>
-                                            {{ disciplina.nome }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            {% endif %}
+                    {% else %}
+                        <!-- ETAPA 2: LANÇAR NOTAS -->
+                        <div class="mb-3">
+                            <span class="text-muted">{{ disciplina_obj.nome }} · Turma {{ turma_obj.nome }}</span>
+                            <a href="{% url 'cadastrar-notas' %}?limpar=1" class="btn btn-secondary btn-sm ml-2">
+                                <i class="ti-close"></i> Trocar disciplina/turma
+                            </a>
                         </div>
-                    </div>
-                    <!-- ALUNO -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Aluno</label>
-                        <div class="col-sm-10">
 
-                            {% if editando %}
-                                <input type="text" class="form-control" name="aluno" id="aluno" value="{{ aluno_nome }}" readonly>
+                        <form method="post" action="{% url 'cadastrar-notas' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="acao" value="salvar_notas">
 
-                            {% else %}
-                                <select name="aluno" class="form-control" id="aluno" class="form-control" required>
-                                    <option value="">Selecione primeiro a turma</option>
-                                 </select>
-                            {% endif %}
+                            <!-- ALUNO -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Aluno</label>
+                                <div class="col-sm-10">
+                                    <select name="aluno" id="aluno" class="form-control" required>
+                                        <option value="">Selecione o aluno</option>
+                                        {% for aluno in alunos %}
+                                            <option value="{{ aluno.id }}">{{ aluno.first_name|default:aluno.username }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
 
-                        </div>
-                    </div>
-                    <!-- P1 -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">P1</label>
-                        <div class="col-sm-10">
-                            <input type="number" step="0.1" min="0" max="10"
-                                class="form-control nota-campo"
-                                name="nota_p1"
-                                value="{{ nota.nota_p1|floatformat:1 }}"
-                                placeholder="0.0 – 10.0">
-                        </div>
-                    </div>
+                            <!-- AVALIAÇÕES DINÂMICAS -->
+                            {% for avaliacao in avaliacoes %}
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">{{ avaliacao.nome }}</label>
+                                <div class="col-sm-10">
+                                    <input type="number" step="0.1" min="0" max="10"
+                                        class="form-control nota-campo"
+                                        data-peso="{{ avaliacao.valor|default:0 }}"
+                                        data-avaliacao-id="{{ avaliacao.id }}"
+                                        name="nota_avaliacao_{{ avaliacao.id }}"
+                                        placeholder="0.0 – 10.0">
+                                </div>
+                            </div>
+                            {% endfor %}
 
-                    <!-- T1 -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">T1</label>
-                        <div class="col-sm-10">
-                            <input type="number" step="0.1" min="0" max="10"
-                                class="form-control nota-campo"
-                                name="nota_t1"
-                                value="{{ nota.nota_t1|floatformat:1 }}"
-                                placeholder="0.0 – 10.0">
-                        </div>
-                    </div>
+                            <!-- MÉDIA FINAL -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Média Final</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" id="media_final"
+                                        placeholder="Calculada automaticamente"
+                                        readonly style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
 
-                    <!-- P2 -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">P2</label>
-                        <div class="col-sm-10">
-                            <input type="number" step="0.1" min="0" max="10"
-                                class="form-control nota-campo"
-                                name="nota_p2"
-                                value="{{ nota.nota_p2|floatformat:1 }}"
-                                placeholder="0.0 – 10.0">
-                        </div>
-                    </div>
+                            <!-- SITUAÇÃO -->
+                            <div class="form-group row">
+                                <label class="col-sm-2 col-form-label">Situação</label>
+                                <div class="col-sm-10">
+                                    <input type="text" class="form-control" id="situacao"
+                                        placeholder="Definida automaticamente" readonly
+                                        style="background-color: #f4f7fa;">
+                                </div>
+                            </div>
 
-                    <!-- T2 -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">T2</label>
-                        <div class="col-sm-10">
-                            <input type="number" step="0.1" min="0" max="10"
-                                class="form-control nota-campo"
-                                name="nota_t2"
-                                value="{{ nota.nota_t2|floatformat:1 }}"
-                                placeholder="0.0 – 10.0">
-                        </div>
-                    </div>
-
-                    <!-- MÉDIA FINAL -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Média Final</label>
-                        <div class="col-sm-10">
-                            <input type="number" step="0.01" min="0" max="10"
-                                class="form-control"
-                                id="media_final"
-                                name="media_final"
-                                value="{{ nota.media_final|floatformat:1 }}"
-                                placeholder="Calculada automaticamente"
-                                readonly
-                                style="background-color: #f4f7fa;">
-                        </div>
-                    </div>
-
-                    <!-- SITUAÇÃO -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Situação</label>
-                        <div class="col-sm-10">
-                            <input type="text" class="form-control" id="situacao"
-                            placeholder="Definida automaticamente" readonly
-                            style="background-color: #f4f7fa;">
-                        </div>
-                    </div>
-
-                    <!-- BOTÕES -->
-                    <div>
-                        <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
-                        <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
-                    </div>
-
-                </form>
+                            <!-- BOTÕES -->
+                            <div>
+                                <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
+                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                {% endif %}
             </div><!-- card-block -->
         </div><!-- card -->
     </div>
@@ -210,77 +251,106 @@
 document.addEventListener("DOMContentLoaded", function () {
     const campos = document.querySelectorAll('.nota-campo');
     const mediaInput = document.getElementById('media_final');
-    const situacaoSelect = document.getElementById('situacao');
+    const situacaoInput = document.getElementById('situacao');
 
     function calcularMedia() {
-        let soma = 0;
+        let somaPesoNota = 0;
+        let somaPeso = 0;
+        let somaSimples = 0;
         let count = 0;
 
         campos.forEach(function (campo) {
             const val = parseFloat(campo.value);
+            const peso = parseFloat(campo.dataset.peso) || 0;
             if (!isNaN(val)) {
-                soma += val;
+                somaPesoNota += val * peso;
+                somaPeso += peso;
+                somaSimples += val;
                 count++;
             }
         });
 
-        if (count === campos.length) {
-            const media = (soma / count).toFixed(2)
-            mediaInput.value = media;
+        if (campos.length > 0 && count === campos.length) {
+            const media = somaPeso > 0 ? (somaPesoNota / somaPeso) : (somaSimples / count);
+            mediaInput.value = media.toFixed(2);
 
             if (media >= 7.0) {
-                situacaoSelect.value = 'aprovado';
+                situacaoInput.value = 'Aprovado';
             } else if (media >= 5.0) {
-                situacaoSelect.value = 'recuperação';
+                situacaoInput.value = 'Recuperação';
             } else {
-                situacaoSelect.value = 'reprovado';
+                situacaoInput.value = 'Reprovado';
             }
         } else {
             mediaInput.value = '';
-            situacaoSelect.value = '';
+            situacaoInput.value = count > 0 ? 'Cursando' : '';
         }
     }
 
     campos.forEach(function (campo) {
         campo.addEventListener('input', function () {
             if (parseFloat(this.value) > 10 || parseFloat(this.value) < 0) {
-            this.value = '';
-        }
-    calcularMedia();
-        campo.addEventListener('input', calcularMedia);
+                this.value = '';
+            }
+            calcularMedia();
+        });
         campo.addEventListener('blur', function () {
             if (this.value !== '') {
                 this.value = parseFloat(this.value).toFixed(1);
             }
         });
     });
-    });
+
+    calcularMedia();
 });
 
-document.getElementById('turma').addEventListener('change', function () {
-    const turmaId = this.value;
-    const turmaNome = this.options[this.selectedIndex].text;
-    const alunoSelect = document.getElementById('aluno');
+var gateDisciplina = document.getElementById('gate-disciplina');
+if (gateDisciplina) {
+    gateDisciplina.addEventListener('change', function () {
+        const disciplinaId = this.value;
+        const turmaSelect = document.getElementById('gate-turma');
 
-    if (!turmaId) {
-        alunoSelect.innerHTML = '<option value="">Selecione primeiro a turma</option>';
-        return;
-    }
+        if (!disciplinaId) {
+            turmaSelect.disabled = true;
+            turmaSelect.innerHTML = '<option value="">Selecione a disciplina primeiro</option>';
+            return;
+        }
 
-    fetch(`/alunos-por-turma/?turma_nome=${turmaNome}`)
-        .then(res => res.json())
-        .then(data => {
-            alunoSelect.innerHTML = '<option value="">Selecione o aluno</option>';
-            data.alunos.forEach(aluno => {
-                const nome = aluno.first_name || aluno.username;
-                alunoSelect.innerHTML += `<option value="${aluno.id}">${nome} (${aluno.username})</option>`;
+        fetch(`/turmas-por-disciplina/?disciplina=${disciplinaId}`)
+            .then(res => res.json())
+            .then(data => {
+                turmaSelect.disabled = false;
+                turmaSelect.innerHTML = '<option value="">Selecione a turma</option>';
+                data.turmas.forEach(turma => {
+                    turmaSelect.innerHTML += `<option value="${turma.id}">${turma.nome}</option>`;
+                });
             });
-        });
-});
-const turmaSelect = document.getElementById('turma');
-if (turmaSelect.value) {
-    turmaSelect.dispatchEvent(new Event('change'));
+    });
 }
 
+var alunoSelect = document.getElementById('aluno');
+if (alunoSelect) {
+    const notasPorAluno = JSON.parse('{{ notas_por_aluno_json|escapejs }}');
+
+    alunoSelect.addEventListener('change', function () {
+        const notasDoAluno = notasPorAluno[this.value] || {};
+
+        document.querySelectorAll('.nota-campo').forEach(function (campo) {
+            const avaliacaoId = campo.dataset.avaliacaoId;
+            const valor = notasDoAluno[avaliacaoId];
+            campo.value = (valor !== undefined && valor !== null) ? valor : '';
+        });
+
+        campo_evento_atualizar_media();
+    });
+}
+
+function campo_evento_atualizar_media() {
+    const evento = new Event('input');
+    const campos = document.querySelectorAll('.nota-campo');
+    if (campos.length > 0) {
+        campos[0].dispatchEvent(evento);
+    }
+}
 </script>
 {% endblock %}

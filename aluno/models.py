@@ -76,6 +76,7 @@ class Avaliacao(models.Model):
         ], verbose_name="Tipo", default="prova")
     valor = models.FloatField(verbose_name="valor", null=True, blank=True)
     disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
+    ano = models.PositiveIntegerField(verbose_name="Ano", null=True, blank=True)
 
 
 class NotaAvaliacao(models.Model):

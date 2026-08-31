@@ -10,8 +10,27 @@
 <link rel="stylesheet" href="{% static 'assets/pages/data-table/css/buttons.dataTables.min.css' %}">
 <link rel="stylesheet" href="{% static 'vendor/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css' %}">
 <style>
+#btn-nova-avaliacao {
+    background-color: #03458F;
+    border-color: #03458F;
+}
+#btn-nova-avaliacao:hover,
+#btn-nova-avaliacao:focus {
+    background-color: #033a78;
+    border-color: #033a78;
+}
 #TabelaAvaliacoes .col-tipo {
     width: 150px;
+}
+#TabelaAvaliacoes .col-acoes {
+    width: 70px;
+}
+#TabelaAvaliacoes .acoes-disciplina {
+    justify-content: center;
+}
+#TabelaAvaliacoes td {
+    vertical-align: middle;
+    padding: 12px 16px;
 }
 .tipo-dropdown-toggle {
     width: 100%;
@@ -140,7 +159,7 @@
                                 <th>Nome</th>
                                 <th class="col-tipo">Tipo</th>
                                 <th>Peso (%)</th>
-                                <th>Ações</th>
+                                <th class="col-acoes">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
