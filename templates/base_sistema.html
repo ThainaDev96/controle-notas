@@ -57,7 +57,8 @@
     #pcoded .pcoded-navbar .pcoded-trigger > a,
     #pcoded .pcoded-navbar .pcoded-trigger.active > a,
     #pcoded .pcoded-navbar .pcoded-submenu,
-    #pcoded .pcoded-navbar .pcoded-submenu li.active > a {
+    #pcoded .pcoded-navbar .pcoded-submenu li.active > a,
+    #pcoded .pcoded-navbar .pcoded-item > li.active > a {
         background-color: #F3F3F3 !important;
     }
     #pcoded .pcoded-navbar .pcoded-submenu a {
@@ -114,6 +115,24 @@
     .link-limpar-filtros:hover {
         color: #333333;
     }
+
+    /* Paginação das tabelas (DataTables) - página ativa na cor da marca em vez do turquesa padrão do tema */
+    .page-item.active .page-link,
+    .paginate_button.current,
+    .paginate_button.current:hover {
+        background-color: #03458F !important;
+        border-color: #03458F !important;
+        color: #ffffff !important;
+    }
+
+    /* Barra que marca o item ativo/expandido no menu lateral - azul da marca em vez do laranja padrão do tema */
+    .pcoded .pcoded-navbar[active-item-theme] .pcoded-item > li.active > a:before,
+    .pcoded .pcoded-navbar[active-item-theme] .pcoded-item > li.pcoded-trigger > a:before,
+    .pcoded .pcoded-navbar[active-item-theme] .pcoded-item > li.pcoded-trigger .pcoded-submenu li > a:before,
+    .pcoded .pcoded-navbar[active-item-theme] .pcoded-item > li.active .pcoded-submenu li > a:before {
+        border-left-color: #03458F !important;
+    }
+
 </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -195,7 +214,7 @@
                             </div>
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
-                                <li>
+                                <li class="{% block nav_painel %}{% endblock %}">
                                     <a href="{% url 'gestao-dashboard' %}">
                                         <span class="pcoded-micon"><i class="feather icon-home"></i></span>
                                         <span class="pcoded-mtext">Painel</span>
