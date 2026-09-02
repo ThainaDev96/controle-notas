@@ -82,10 +82,37 @@
         background-color: #03458F !important;
     }
 
-    /* Botões "Filtrar" (dentro do conteúdo, não mexe no botão "Entrar" do login) */
-    .pcoded-content .btn-primary.btn-block {
-        background-color: #03458F !important;
-        border-color: #03458F !important;
+    /* Botão "Filtrar" e link "Limpar filtros" (visual delicado: ícone + texto sublinhado, sem fundo) */
+    .btn-filtrar-delicado {
+        background: transparent;
+        border: none;
+        padding: 4px 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #03458F;
+        font-size: 15px;
+        cursor: pointer;
+        transition: color .15s ease;
+    }
+    .btn-filtrar-delicado .texto-sublinhado {
+        text-decoration: underline;
+        text-underline-offset: 4px;
+    }
+    .btn-filtrar-delicado:hover,
+    .btn-filtrar-delicado:hover i {
+        color: #022f61;
+    }
+    .link-limpar-filtros {
+        font-size: 13px;
+        color: #6c757d;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+        transition: color .15s ease;
+    }
+    .link-limpar-filtros:hover {
+        color: #333333;
     }
 </style>
     {% block extra_css %}{% endblock %}

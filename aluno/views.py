@@ -328,16 +328,10 @@ def cadastrar_notas(request):
     })
 
 def configurar_avaliacoes(request):
-    if request.GET.get('limpar'):
-        request.session.pop('filtro_avaliacao_disciplina', None)
-        return redirect('configurar-avaliacoes')
-
-    disciplina_id = request.POST.get('disciplina', '')
-
-    if request.method == 'POST':
-        request.session['filtro_avaliacao_disciplina'] = disciplina_id
-    else:
-        disciplina_id = request.session.get('filtro_avaliacao_disciplina', '')
+    # Sempre exige a disciplina ser escolhida de novo a cada visita à tela --
+    # não persiste a última seleção entre navegações, pra evitar mostrar as
+    # avaliações de uma disciplina "aleatória" sem o professor ter escolhido.
+    disciplina_id = request.POST.get('disciplina', '') if request.method == 'POST' else ''
 
     if disciplina_id:
         avaliacoes = Avaliacao.objects.select_related('disciplina').filter(

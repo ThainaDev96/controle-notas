@@ -53,12 +53,34 @@
 }
 
 .btn-filtrar {
-    height: 36px;
-    padding: 0 22px;
+    background: transparent;
+    border: none;
+    padding: 4px 0;
     font-size: 0.88rem;
-    border-radius: 6px;
+    color: #03458F;
     white-space: nowrap;
     flex-shrink: 0;
+    cursor: pointer;
+    transition: color .15s ease;
+}
+.btn-filtrar .texto-sublinhado {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+.btn-filtrar:hover,
+.btn-filtrar:hover i {
+    color: #022f61;
+}
+
+.btn-download {
+    color: #03458F;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-download .texto-sublinhado {
+    text-decoration: underline;
+    text-underline-offset: 4px;
 }
 
 /* Cores das notas */
@@ -234,8 +256,8 @@
                             {% endfor %}
                             </select>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-filtrar">
-                            <i class="ti-filter"></i> Filtrar
+                        <button type="submit" class="btn-filtrar">
+                            <i class="ti-filter"></i> <span class="texto-sublinhado">Filtrar</span>
                         </button>
                     </div>
                 </form>
@@ -364,8 +386,8 @@
             {% endif %}
             <!-- Botão download -->
             <div style="text-align: right; padding: 0 20px 15px 0;">
-                <a href="{% url 'gerar-relatorio' %}" class="btn btn-primary btn-filtrar" style="border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
-                    <i class="ti-download"></i> Download
+                <a href="{% url 'gerar-relatorio' %}" class="btn-download">
+                    <i class="ti-download"></i> <span class="texto-sublinhado">Download</span>
                 </a>
             </div>
         </div>

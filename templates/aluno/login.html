@@ -20,6 +20,11 @@
     <link rel="stylesheet" href="{% static 'assets/icon/themify-icons/themify-icons.css' %}">
     <link rel="stylesheet" href="{% static 'assets/icon/icofont/css/icofont.css' %}">
     <link rel="stylesheet" href="{% static 'assets/css/style.css' %}">
+    <style>
+        .login-block {
+            background: linear-gradient(115deg, #E6EAF4 0%, #E6EAF4 6%, #1B4DB2 38%, #E3172A 100%);
+        }
+    </style>
 </head>
 
 <body class="fix-menu">
@@ -51,7 +56,7 @@
                         <form class="md-float-material form-material" action="{% url 'login' %}" method="post">
                             {% csrf_token %}
                             <div class="text-center">
-                                <img src="{% static 'assets/images/logo1.png' %}" alt="logo1.png"width="250">
+                                <img src="{% static 'assets/images/logo1.png' %}" alt="logo1.png" width="260" style="filter: drop-shadow(0 8px 18px rgba(0,0,0,.6));">
                             </div>
                             <div class="auth-box card" style="margin-top: -10px;">
                                 <div class="card-block">
@@ -77,7 +82,7 @@
                                     </div>
                                     <div class="row m-t-30">
                                         <div class="col-md-12">
-                                            <button type="submit" class="btn btn-primary btn-md btn-block waves-effect waves-light text-center m-b-20">Entrar</button>
+                                            <button type="submit" class="btn btn-md btn-block waves-effect waves-light text-center m-b-20" style="background-color: #03458F; border-color: #03458F; color: #fff;">Entrar</button>
                                         </div>
                                     </div>
                                     <hr>
