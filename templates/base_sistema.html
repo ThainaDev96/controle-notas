@@ -215,7 +215,7 @@
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_painel %}{% endblock %}">
-                                    <a href="{% url 'gestao-dashboard' %}">
+                                    <a href="{% url 'professor-dashboard' %}">
                                         <span class="pcoded-micon"><i class="feather icon-home"></i></span>
                                         <span class="pcoded-mtext">Painel</span>
                                     </a>
@@ -237,7 +237,7 @@
                                             </a>
                                         </li>
                                         <li class="{% block nav_configurar_avaliacoes %}{% endblock %}">
-                                            <a href="{% url 'configurar-avaliacoes' %}">
+                                            <a href="{% url 'configurar-avaliacoes' %}?limpar=1">
                                                 <span class="pcoded-mtext">Configurar Avaliações</span>
                                             </a>
                                         </li>

@@ -42,7 +42,7 @@
                         <label class="col-sm-2 col-form-label">Professor</label>
                         <div class="col-sm-10">
                             <select name="professor" class="form-control" required>
-                                <option value="">Selecione o professor</option>
+                                <option value="" disabled hidden selected>Selecione o professor</option>
                                 {% for prof in professores %}
                                     <option value="{{ prof.id }}">
                                         {{ prof.first_name }}

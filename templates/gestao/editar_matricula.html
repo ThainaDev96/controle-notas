@@ -33,7 +33,7 @@
                         <label class="col-sm-2 col-form-label">Aluno</label>
                         <div class="col-sm-10">
                             <select name="aluno" class="form-control" required>
-                                <option value="">Selecione o aluno</option>
+                                <option value="" disabled hidden>Selecione o aluno</option>
                                 {% for aluno in alunos %}
                                     <option value="{{ aluno.id }}" {% if aluno.id == matricula.aluno_id %}selected{% endif %}>
                                         {{ aluno.first_name }}
@@ -48,7 +48,7 @@
                         <label class="col-sm-2 col-form-label">Turma</label>
                         <div class="col-sm-10">
                             <select name="turma" class="form-control" required>
-                                <option value="">Selecione a turma</option>
+                                <option value="" disabled hidden>Selecione a turma</option>
                                 {% for turma in turmas %}
                                     <option value="{{ turma.id }}" {% if turma.id == matricula.turma_id %}selected{% endif %}>
                                         {{ turma.nome }} - {{ turma.disciplina.nome }}

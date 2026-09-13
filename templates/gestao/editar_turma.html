@@ -42,7 +42,7 @@
                         <label class="col-sm-2 col-form-label">Disciplina</label>
                         <div class="col-sm-10">
                             <select name="disciplina" class="form-control" required>
-                                <option value="">Selecione a disciplina</option>
+                                <option value="" disabled hidden>Selecione a disciplina</option>
                                 {% for disciplina in disciplinas %}
                                     <option value="{{ disciplina.id }}" {% if disciplina.id == turma.disciplina_id %}selected{% endif %}>
                                         {{ disciplina.nome }}

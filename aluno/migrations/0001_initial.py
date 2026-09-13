@@ -41,9 +41,9 @@ class Migration(migrations.Migration):
             name='Nota',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('situacao', models.CharField(choices=[('aprovado', 'Aprovado'), ('recuperacao', 'Em recuperação'), ('reprovado', 'Reprovado')], verbose_name='Situação')),
+                ('situacao', models.CharField(max_length=20, choices=[('aprovado', 'Aprovado'), ('recuperacao', 'Em recuperação'), ('reprovado', 'Reprovado')], verbose_name='Situação')),
                 ('nota', models.FloatField(verbose_name='Nota')),
-                ('tipo', models.CharField(choices=[('p1', 'P1'), ('p2', 'P2'), ('t1', 'T1'), ('t2', 'T2')], verbose_name='Situação')),
+                ('tipo', models.CharField(max_length=20, choices=[('p1', 'P1'), ('p2', 'P2'), ('t1', 'T1'), ('t2', 'T2')], verbose_name='Situação')),
                 ('media_final', models.FloatField(verbose_name='Média Final')),
                 ('ativo', models.BooleanField(default=True, verbose_name='Ativo')),
                 ('criado_em', models.DateTimeField(auto_now_add=True, verbose_name='Criado em')),

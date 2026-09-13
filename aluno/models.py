@@ -1,18 +1,43 @@
 from django.db import models
+from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+LIMITE_MODO_CALCULO = {'soma': 10, 'ponderada': 100}
 
 
 class Disciplina(models.Model):
     nome = models.CharField(max_length=50, verbose_name="Nome")
     professor = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Professor")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
-    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
-    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+    modo_calculo = models.CharField(max_length=20, null=True, blank=True, choices=[
+        ("soma", "Soma dos pesos"),
+        ("ponderada", "Média ponderada"),
+        ("aritmetica", "Média aritmética"),
+    ], verbose_name="Modo de cálculo")
 
     def __str__(self):
         return self.nome
+
+    @property
+    def rotulo_valor(self):
+        ROTULOS_VALOR = {
+            'soma': 'Peso (pontos)',
+            'ponderada': 'Peso (%)',
+            'aritmetica': 'Valor',
+        }
+        return ROTULOS_VALOR[self.modo_calculo]
+
+    @property
+    def limite_valor_avaliacoes(self):
+        return LIMITE_MODO_CALCULO.get(self.modo_calculo)
+
+    def total_valor_avaliacoes(self, ano, excluir_id=None):
+        qs = self.avaliacao_set.filter(ano=ano)
+        if excluir_id:
+            qs = qs.exclude(id=excluir_id)
+        return qs.aggregate(total=Sum('valor'))['total'] or 0
 
 
 class Turma(models.Model):
@@ -20,8 +45,6 @@ class Turma(models.Model):
     disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
     alunos = models.ManyToManyField(User, related_name="turmas", verbose_name="Turmas")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
-    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
-    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
     def __str__(self):
         return f"{self.nome} - {self.disciplina.nome}"
@@ -31,8 +54,6 @@ class Matricula(models.Model):
     aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
     turma = models.ForeignKey(Turma, on_delete=models.CASCADE, verbose_name="Disciplina")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
-    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
-    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
     # def __str__(self):
     #     return self.aluno
@@ -41,20 +62,16 @@ class Matricula(models.Model):
 class Nota(models.Model):
     aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
     disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
-    situacao = models.CharField(choices=[
+    situacao = models.CharField(max_length=20, choices=[
         ("aprovado", "Aprovado"),
         ("recuperacao", "Em recuperação"),
+        ("exame", "Exame"),
         ("reprovado", "Reprovado"),
         ("cursando", "Cursando"),
     ], verbose_name="Situação")
-    nota_p1 = models.FloatField(verbose_name="P1", null=True, blank=True)
-    nota_p2 = models.FloatField(verbose_name="P2", null=True, blank=True)
-    nota_t1 = models.FloatField(verbose_name="T1", null=True, blank=True)
-    nota_t2 = models.FloatField(verbose_name="T2", null=True, blank=True)
     media_final = models.FloatField(verbose_name="Média Final", null=True, blank=True)
+    nota_exame = models.FloatField(verbose_name="Nota do Exame", null=True, blank=True)
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
-    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
-    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     ano = models.PositiveIntegerField(verbose_name="Ano", null=True)
 
     # def __str__(self):
@@ -69,7 +86,7 @@ def vincular_aluno_turma(sender, instance, created, **kwargs):
 
 class Avaliacao(models.Model):
     nome = models.CharField(max_length=50, verbose_name="Nome")
-    tipo = models.CharField(choices=[
+    tipo = models.CharField(max_length=20, choices=[
             ("prova", "Prova"),
             ("trabalho", "Trabalho"),
             ("atividade_aula", "Atividade em aula"),
@@ -83,3 +100,6 @@ class NotaAvaliacao(models.Model):
     aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
     avaliacao = models.ForeignKey(Avaliacao, on_delete=models.CASCADE, verbose_name="Avaliação")
     nota = models.FloatField(verbose_name="Nota", null=True, blank=True)
+
+    class Meta:
+        unique_together = ('aluno', 'avaliacao')

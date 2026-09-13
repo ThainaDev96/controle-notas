@@ -132,29 +132,10 @@ class Command(BaseCommand):
 
         for aluno in alunos:
             for disciplina in disciplinas:
-                p1 = round(random.uniform(0, 10), 1)
-                t1 = round(random.uniform(0, 10), 1)
-                p2 = round(random.uniform(0, 10), 1)
-                t2 = round(random.uniform(0, 10), 1)
-
-                media = round((p1 + t1 + p2 + t2) / 4, 2)
-
-                if media >= 7:
-                    situacao = "aprovado"
-                elif media >= 5:
-                    situacao = "recuperacao"
-                else:
-                    situacao = "reprovado"
-
                 Nota.objects.get_or_create(
                     aluno=aluno,
                     disciplina=disciplina,
                     defaults={
-                        "nota_p1": p1,
-                        "nota_p2": p2,
-                        "nota_t1": t1,
-                        "nota_t2": t2,
-                        "media_final": media,
-                        "situacao": situacao,
+                        "situacao": "cursando",
                     }
                 )

@@ -88,7 +88,8 @@
     color: #28a745;
     font-weight: 600;
 }
-.nota-recuperacao {
+.nota-recuperacao,
+.nota-exame {
     color: #fd7e14;
     font-weight: 600;
 }
@@ -198,6 +199,43 @@
 }
 
 .turma-sep { color: #bbb; }
+
+.card.regra-aprovacao {
+    border: 1px solid #e0e6ed;
+}
+.regra-aprovacao-titulo {
+    color: #03458F;
+    font-weight: 700;
+}
+.regra-aprovacao-lista {
+    padding-left: 18px;
+    margin-bottom: 10px;
+}
+.regra-aprovacao-lista li {
+    margin-bottom: 4px;
+}
+.card-resumo-calculo .card-block {
+    padding: 15px 20px;
+}
+.resumo-disciplina {
+    border-bottom: 1px solid #eee;
+    padding: 10px 0;
+}
+.resumo-disciplina:last-child {
+    border-bottom: none;
+}
+.resumo-disciplina-nome {
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 4px;
+}
+.formula-exemplo {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    color: #333;
+}
 /* Ajuste responsivo - boletim no mobile */
 @media (max-width: 768px) {
     .card-header-boletim {
@@ -265,6 +303,8 @@
         </div>
         <!-- FIM CARD DE FILTROS -->
 
+        {% include "partials/caixa-regra-aprovacao.html" %}
+
         <div class="card">
             <div class="card-header">
                 <div class="card-header-boletim w-100">
@@ -279,7 +319,7 @@
                         </div>
                         <div class="legenda-item">
                             <span class="legenda-dot dot-recuperacao"></span>
-                            <span>Recuperação</span>
+                            <span>Exame</span>
                         </div>
                         <div class="legenda-item">
                             <span class="legenda-dot dot-reprovado"></span>
@@ -299,10 +339,6 @@
                         <thead>
                             <tr>
                                 <th>Disciplina</th>
-                                <th>P1</th>
-                                <th>T1</th>
-                                <th>P2</th>
-                                <th>T2</th>
                                 <th>MF</th>
                                 <th>Situação</th>
                             </tr>
@@ -310,50 +346,24 @@
 
                         <tbody>
                             {% for nota in notas %}
-                                {% if nota.situacao == 'aprovado' %}
-                                    <tr>
-                                        <td>{{ nota.disciplina }}</td>
-                                        <td class="nota-aprovado">{{ nota.nota_p1|default:"-" }}</td>
-                                        <td class="nota-aprovado">{{ nota.nota_t1|default:"-" }}</td>
-                                        <td class="nota-aprovado">{{ nota.nota_p2|default:"-" }}</td>
-                                        <td class="nota-aprovado">{{ nota.nota_t2|default:"-" }}</td>
-                                        <td class="nota-aprovado">{{ nota.media_final|default:"-" }}</td>
-                                        <td><span class="badge-situacao badge-aprovado">Aprovado</span></td>
-                                    </tr>
-                                {% elif nota.situacao == 'recuperacao' %}
-                                    <tr>
-                                        <td>{{ nota.disciplina }}</td>
-                                        <td class="nota-recuperacao">{{ nota.nota_p1|default:"-" }}</td>
-                                        <td class="nota-recuperacao">{{ nota.nota_t1|default:"-" }}</td>
-                                        <td class="nota-recuperacao">{{ nota.nota_p2|default:"-" }}</td>
-                                        <td class="nota-recuperacao">{{ nota.nota_t2|default:"-" }}</td>
-                                        <td class="nota-recuperacao">{{ nota.media_final|default:"-" }}</td>
-                                        <td><span class="badge-situacao badge-recuperacao">Em Recuperação</span></td>
-                                    </tr>
-                                {% elif nota.situacao == 'reprovado' %}
-                                    <tr>
-                                        <td>{{ nota.disciplina }}</td>
-                                        <td class="nota-reprovado">{{ nota.nota_p1|default:"-" }}</td>
-                                        <td class="nota-reprovado">{{ nota.nota_t1|default:"-" }}</td>
-                                        <td class="nota-reprovado">{{ nota.nota_p2|default:"-" }}</td>
-                                        <td class="nota-reprovado">{{ nota.nota_t2|default:"-" }}</td>
-                                        <td class="nota-reprovado">{{ nota.media_final|default:"-" }}</td>
-                                        <td><span class="badge-situacao badge-reprovado">Reprovado</span></td>
-                                    </tr>
-                                {% else %}
-                                    <tr>
-                                        <td>{{ nota.disciplina }}</td>
-                                        <td class="nota-cursando">{{ nota.nota_p1|default:"-" }}</td>
-                                        <td class="nota-cursando">{{ nota.nota_t1|default:"-" }}</td>
-                                        <td class="nota-cursando">{{ nota.nota_p2|default:"-" }}</td>
-                                        <td class="nota-cursando">{{ nota.nota_t2|default:"-" }}</td>
-                                        <td class="nota-cursando">{{ nota.media_final|default:"-" }}</td>
-                                        <td><span class="badge-situacao badge-cursando">Cursando</span></td>
-                                    </tr>
-                                {% endif %}
+                                <tr>
+                                    <td>{{ nota.disciplina }}</td>
+                                    <td class="nota-{{ nota.situacao }}">{{ nota.media_final|default:"-" }}</td>
+                                    <td>
+                                        {% if nota.situacao == 'aprovado' %}
+                                            <span class="badge-situacao badge-aprovado">Aprovado</span>
+                                        {% elif nota.situacao == 'exame' %}
+                                            <span class="badge-situacao badge-recuperacao">Exame</span>
+                                        {% elif nota.situacao == 'reprovado' %}
+                                            <span class="badge-situacao badge-reprovado">Reprovado</span>
+                                        {% else %}
+                                            <span class="badge-situacao badge-cursando">Cursando</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="9">Nenhuma nota encontrada</td>
+                                    <td colspan="3">Nenhuma nota encontrada</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -375,7 +385,7 @@
                 <span class="sf-sep">·</span>
                 <span class="sf-aprovado">{{ total_aprovadas }} aprovadas</span>
                 <span class="sf-sep">·</span>
-                <span class="sf-recuperacao">{{ total_recuperacao }} em recuperação</span>
+                <span class="sf-recuperacao">{{ total_exame }} em exame</span>
                 <span class="sf-sep">·</span>
                 <span class="sf-reprovado">{{ total_reprovadas }} reprovadas</span>
                 {% if situacao_final == 'em_andamento' %}
@@ -391,6 +401,23 @@
                 </a>
             </div>
         </div>
+
+        {% if resumos_calculo %}
+        <!-- RESUMO DO CÁLCULO -->
+        <div class="card card-resumo-calculo">
+            <div class="card-header">
+                <h5 class="mb-0">Resumo do cálculo</h5>
+            </div>
+            <div class="card-block">
+                {% for resumo in resumos_calculo %}
+                <div class="resumo-disciplina">
+                    <p class="resumo-disciplina-nome mb-1">{{ resumo.disciplina_nome }}</p>
+                    <div class="formula-exemplo">{{ resumo.formula_texto }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

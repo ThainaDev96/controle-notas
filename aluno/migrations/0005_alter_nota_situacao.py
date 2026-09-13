@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='nota',
             name='situacao',
-            field=models.CharField(choices=[('aprovado', 'Aprovado'), ('recuperacao', 'Em recuperação'), ('reprovado', 'Reprovado'), ('cursando', 'Cursando')], verbose_name='Situação'),
+            field=models.CharField(max_length=20, choices=[('aprovado', 'Aprovado'), ('recuperacao', 'Em recuperação'), ('reprovado', 'Reprovado'), ('cursando', 'Cursando')], verbose_name='Situação'),
         ),
     ]

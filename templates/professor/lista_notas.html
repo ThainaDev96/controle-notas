@@ -55,7 +55,7 @@
                             <div class="form-group">
                                 <label for="filtro-disciplina"><i class="ti-book"></i>Disciplina</label>
                                 <select id="filtro-disciplina" name="disciplina" class="form-control" required>
-                                    <option value="">Selecione a disciplina</option>
+                                    <option value="" disabled hidden {% if not disciplina_selecionada %}selected{% endif %}>Selecione a disciplina</option>
                                     {% for disciplina in disciplinas %}
                                         <option value="{{ disciplina.id }}"
                                             {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
@@ -71,7 +71,7 @@
                                 <label for="filtro-turma"><i class="ti-user"></i>Turma</label>
                                 <select id="filtro-turma" name="turma" class="form-control" required {% if not disciplina_selecionada %}disabled{% endif %}>
                                     {% if disciplina_selecionada %}
-                                        <option value="">Selecione a turma</option>
+                                        <option value="" disabled hidden {% if not turma_selecionada %}selected{% endif %}>Selecione a turma</option>
                                         {% for turma in turmas %}
                                             <option value="{{ turma.id }}"
                                                 {% if turma.id|stringformat:"s" == turma_selecionada %}selected{% endif %}>
@@ -79,7 +79,7 @@
                                             </option>
                                         {% endfor %}
                                     {% else %}
-                                        <option value="">Selecione a disciplina primeiro</option>
+                                        <option value="" disabled hidden selected>Selecione a disciplina primeiro</option>
                                     {% endif %}
                                 </select>
                             </div>
@@ -137,6 +137,7 @@
                                 {% endfor %}
                                 <th>MF</th>
                                 <th>Situação</th>
+                                <th>Exame</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
@@ -151,6 +152,13 @@
                                     {% endfor %}
                                     <td class="col-mf">{{ item.media_final|default:"-" }}</td>
                                     <td class="col-situacao">{{ item.situacao_display }}</td>
+                                    <td class="col-exame">
+                                        {% if item.situacao_raw == 'exame' %}
+                                            <span contenteditable="true" class="editavel-exame" data-nota="{{ item.nota_id }}">{{ item.nota_exame|default_if_none:"" }}</span>
+                                        {% else %}
+                                            {{ item.nota_exame|default_if_none:"-" }}
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% url 'editar-nota' item.nota_id as url_editar %}
                                         {% url 'deletar-nota' item.nota_id as url_deletar %}
@@ -159,7 +167,7 @@
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="{{ avaliacoes|length|add:5 }}">Nenhum aluno matriculado nessa turma</td>
+                                    <td colspan="{{ avaliacoes|length|add:6 }}">Nenhum aluno matriculado nessa turma</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -197,12 +205,12 @@ $(document).ready(function () {
         var $turma = $('#filtro-turma');
 
         if (!disciplina) {
-            $turma.prop('disabled', true).html('<option value="">Selecione a disciplina primeiro</option>');
+            $turma.prop('disabled', true).html('<option value="" disabled hidden selected>Selecione a disciplina primeiro</option>');
             return;
         }
 
         $.get("{% url 'turmas-por-disciplina' %}", { disciplina: disciplina }, function (data) {
-            $turma.prop('disabled', false).html('<option value="">Selecione a turma</option>');
+            $turma.prop('disabled', false).html('<option value="" disabled hidden selected>Selecione a turma</option>');
             data.turmas.forEach(function (t) {
                 $turma.append('<option value="' + t.id + '">' + t.nome + '</option>');
             });
@@ -221,6 +229,21 @@ $(document).on('blur', '.editavel', function () {
         if (resp.ok) {
             $td.closest('tr').find('.col-mf').text(resp.media_final ?? '-');
             $td.closest('tr').find('.col-situacao').text(resp.situacao);
+        } else {
+            alert(resp.erro);
+        }
+    });
+});
+
+$(document).on('blur', '.editavel-exame', function () {
+    const $span = $(this);
+    $.post("{% url 'lancar-nota-exame-ajax' %}", {
+        id: $span.data('nota'),
+        valor: $span.text().trim(),
+        csrfmiddlewaretoken: '{{ csrf_token }}'
+    }, function (resp) {
+        if (resp.ok) {
+            $span.closest('tr').find('.col-situacao').text(resp.situacao);
         } else {
             alert(resp.erro);
         }

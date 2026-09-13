@@ -77,6 +77,68 @@
     background-color: #1B3D93;
     color: #FFFFFF;
 }
+#indicador-preenchimento {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background-color: #eef3fb;
+    color: #03458F;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.wrapper-indicador {
+    display: flex;
+    justify-content: flex-end;
+}
+.card.regra-aprovacao {
+    border: 1px solid #e0e6ed;
+}
+.regra-aprovacao-titulo {
+    color: #03458F;
+    font-weight: 700;
+}
+.regra-aprovacao-lista {
+    padding-left: 18px;
+    margin-bottom: 10px;
+}
+.regra-aprovacao-lista li {
+    margin-bottom: 4px;
+}
+.card-resumo-formula .card-block {
+    padding: 15px 20px;
+}
+.formula-exemplo {
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    color: #333;
+}
+#aviso-modo-travado {
+    font-size: 0.85rem;
+}
+.badge-config-status {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    background-color: #eef3fb;
+    color: #03458F;
+    font-size: 0.78rem;
+    font-weight: 600;
+    vertical-align: middle;
+}
+.resumo-selecao-atual {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+.resumo-selecao-atual span i {
+    color: #03458F;
+    margin-right: 6px;
+}
 </style>
 {% endblock %}
 
@@ -93,6 +155,7 @@
     </div>
 </div>
 
+{% if not disciplina_atual %}
 <!-- CARD DE FILTROS -->
 <div class="row">
     <div class="col-sm-12">
@@ -101,13 +164,13 @@
                 <form method="POST" action="{% url 'configurar-avaliacoes' %}" id="form-filtros">
                     {% csrf_token %}
                     <div class="row">
-                        <div class="col-md-8">
+                        <div class="col-md-5">
                             <div class="form-group">
                                 <label for="filtro-disciplina">Disciplina</label>
                                 <select id="filtro-disciplina" name="disciplina" class="form-control" required>
-                                    <option value="">Selecione a disciplina</option>
+                                    <option value="" disabled hidden {% if not disciplina_selecionada %}selected{% endif %}>Selecione a disciplina</option>
                                     {% for disciplina in disciplinas %}
-                                        <option value="{{ disciplina.id }}"
+                                        <option value="{{ disciplina.id }}" data-modo="{{ disciplina.modo_calculo|default_if_none:'' }}" data-tem-avaliacao="{{ disciplina.total_avaliacoes_ano }}"
                                             {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
                                             {{ disciplina.nome }}
                                         </option>
@@ -116,19 +179,29 @@
                             </div>
                         </div>
 
-                        <div class="col-md-4 d-flex align-items-end">
-                            <div class="form-group w-100">
-                                <button type="submit" class="btn-filtrar-delicado">
-                                    <i class="ti-filter"></i> <span class="texto-sublinhado">Filtrar</span>
-                                </button>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-modo">Modo de cálculo</label>
+                                <select id="filtro-modo" name="modo" class="form-control" required>
+                                    <option value="" disabled hidden {% if not modo_selecionado %}selected{% endif %}>Selecione o modo</option>
+                                    <option value="soma" {% if modo_selecionado == "soma" %}selected{% endif %}>Soma dos pesos</option>
+                                    <option value="ponderada" {% if modo_selecionado == "ponderada" %}selected{% endif %}>Média ponderada</option>
+                                    <option value="aritmetica" {% if modo_selecionado == "aritmetica" %}selected{% endif %}>Média aritmética</option>
+                                </select>
+                                <input type="hidden" id="filtro-modo-hidden">
+                                <div id="aviso-modo-travado" class="text-muted mt-1" style="display: none;">
+                                    Essa disciplina já tem avaliações cadastradas.
+                                    <a href="#" id="link-trocar-modo">Trocar o modo mesmo assim</a>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-md-12">
-                            <a href="{% url 'configurar-avaliacoes' %}?limpar=1" class="link-limpar-filtros">
-                                <i class="ti-close"></i> Limpar filtros
-                            </a>
+
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="form-group w-100">
+                                <button type="submit" class="btn-filtrar-delicado">
+                                    <span class="texto-sublinhado">Configurar</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -137,67 +210,115 @@
     </div>
 </div>
 <!-- FIM CARD DE FILTROS -->
+{% else %}
+<!-- RESUMO FIXO DA SELEÇÃO ATUAL (não editável), REGRA DE APROVAÇÃO E RESUMO DO CÁLCULO -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-block d-flex justify-content-between align-items-center flex-wrap" style="padding: 15px;">
+                <div class="resumo-selecao-atual">
+                    <span><i class="ti-book"></i>{{ disciplina_atual.nome }}</span>
+                    <span><i class="ti-settings"></i>{{ disciplina_atual.get_modo_calculo_display }}</span>
+                </div>
+                <a href="{% url 'configurar-avaliacoes' %}?trocar=1" class="btn btn-secondary btn-sm">
+                    <i class="ti-exchange-vertical"></i> Trocar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% if resumo_exemplo %}
+<div class="row">
+    <div class="col-sm-12">
+        {% include "partials/caixa-regra-aprovacao.html" %}
+    </div>
+</div>
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card card-resumo-formula">
+            <div class="card-block">
+                <h6 class="regra-aprovacao-titulo"><i class="ti-calculator"></i> Como a fórmula do modo "{{ disciplina_atual.get_modo_calculo_display }}" funciona</h6>
+                <p class="text-muted mb-2">Exemplo com notas fictícias, usando as avaliações cadastradas para {{ disciplina_atual.nome }}:</p>
+                <div class="formula-exemplo">{{ resumo_exemplo.formula_texto }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}
 
 <!-- CARD DA TABELA -->
 <div class="row">
     <div class="col-sm-12">
         <div class="card">
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <h5 style="margin: 0;">Avaliações cadastradas</h5>
-                {% if disciplina_selecionada %}
+                <h5 style="margin: 0;">
+                    Avaliações cadastradas
+                    {% if disciplina_atual %}
+                        <span class="badge-config-status">
+                            {% if avaliacoes %}{{ avaliacoes|length }} avaliações cadastradas{% else %}Nova configuração{% endif %}
+                        </span>
+                    {% endif %}
+                </h5>
+                {% if disciplina_atual %}
                 <button type="button" id="btn-nova-avaliacao" class="btn btn-primary">
                     <i class="ti-plus" style="color: #fff;"></i> Nova Avaliação
                 </button>
                 {% endif %}
             </div>
             <div class="card-block">
-                {% if disciplina_selecionada %}
-                <div class="table-responsive dt-responsive">
-                    <table id="TabelaAvaliacoes" class="table table-striped table-bordered">
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th class="col-tipo">Tipo</th>
-                                <th>Peso (%)</th>
-                                <th class="col-acoes">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for avaliacao in avaliacoes %}
-                            <tr>
-                                <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="nome">{{ avaliacao.nome }}</td>
-                                <td>
-                                    <div class="dropdown">
-                                        <button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-id="{{ avaliacao.id }}" data-valor="{{ avaliacao.tipo }}" aria-haspopup="true" aria-expanded="false">{{ avaliacao.get_tipo_display }}</button>
-                                        <div class="dropdown-menu tipo-dropdown-menu">
-                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'prova' %}active{% endif %}" data-valor="prova">Prova</a>
-                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'trabalho' %}active{% endif %}" data-valor="trabalho">Trabalho</a>
-                                            <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'atividade_aula' %}active{% endif %}" data-valor="atividade_aula">Atividade em aula</a>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="valor">{{ avaliacao.valor|default_if_none:"" }}</td>
-                                <td>
-                                    {% url 'deletar-avaliacao' avaliacao.id as url_deletar %}
-                                    <div class="acoes-disciplina">
-                                        <a href="#" class="icone-acao btn-deletar" data-url="{{ url_deletar }}" data-nome="{{ avaliacao.nome }}" title="Excluir">
-                                            <i class="ti-trash"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr id="linha-vazia-avaliacoes">
-                                <td colspan="4">Nenhuma avaliação encontrada</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
+                {% if not disciplina_atual %}
                 <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                     <i class="ti-filter" style="font-size: 22px; color: #999;"></i>
-                    <p class="text-muted mt-2 mb-0">Selecione a disciplina para ver as avaliações cadastradas</p>
+                    <p class="text-muted mt-2 mb-0">Selecione a disciplina e o modo de cálculo para configurar as avaliações</p>
+                </div>
+                {% else %}
+                <div id="wrapper-vazio-avaliacoes" class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem; {% if not sem_avaliacoes %}display: none;{% endif %}">
+                    <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Não há avaliações configuradas ainda para esta disciplina.</p>
+                </div>
+                <div id="wrapper-tabela-avaliacoes" {% if sem_avaliacoes %}style="display: none;"{% endif %}>
+                    <div class="table-responsive dt-responsive">
+                        <table id="TabelaAvaliacoes" class="table table-striped table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th class="col-tipo">Tipo</th>
+                                    <th>{{ disciplina_atual.rotulo_valor }}</th>
+                                    <th class="col-acoes">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for avaliacao in avaliacoes %}
+                                <tr>
+                                    <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="nome">{{ avaliacao.nome }}</td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-id="{{ avaliacao.id }}" data-valor="{{ avaliacao.tipo }}" aria-haspopup="true" aria-expanded="false">{{ avaliacao.get_tipo_display }}</button>
+                                            <div class="dropdown-menu tipo-dropdown-menu">
+                                                <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'prova' %}active{% endif %}" data-valor="prova">Prova</a>
+                                                <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'trabalho' %}active{% endif %}" data-valor="trabalho">Trabalho</a>
+                                                <a href="#" class="dropdown-item tipo-dropdown-item {% if avaliacao.tipo == 'atividade_aula' %}active{% endif %}" data-valor="atividade_aula">Atividade em aula</a>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="valor">{{ avaliacao.valor|default_if_none:"" }}</td>
+                                    <td>
+                                        {% url 'deletar-avaliacao' avaliacao.id as url_deletar %}
+                                        <div class="acoes-disciplina">
+                                            <a href="#" class="icone-acao btn-deletar" data-url="{{ url_deletar }}" data-nome="{{ avaliacao.nome }}" title="Excluir">
+                                                <i class="ti-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="wrapper-indicador">
+                        <span id="indicador-preenchimento"></span>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -208,6 +329,30 @@
 
 <!-- Modal de Confirmação -->
 {% include "partials/modal-confirmar-exclusao.html" %}
+
+<!-- Modal de Confirmação: trocar o modo de cálculo -->
+<div class="modal fade" id="modalTrocarModo" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Trocar o modo de cálculo</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Trocar o modo de cálculo de <strong id="nome-disciplina-modal-trocar"></strong> apaga todas as avaliações já cadastradas para essa disciplina neste ano, porque os campos significam coisas diferentes em cada modo e não podem ser reaproveitados automaticamente. Essa ação não pode ser desfeita.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form method="POST" id="form-trocar-modo" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, trocar o modo</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -219,29 +364,102 @@
 
 <script>
 var URL_DELETAR_AVALIACAO_TPL = "{% url 'deletar-avaliacao' 0 %}";
+var URL_RESETAR_MODO_TPL = "{% url 'resetar-avaliacoes-modo' 0 %}";
+var ROTULO_VALOR = "{{ disciplina_atual.rotulo_valor|escapejs }}";
+var MODO_CALCULO = "{{ disciplina_atual.modo_calculo|escapejs }}";
+
+function formatarPt(numero) {
+    return numero.toFixed(1).replace('.', ',');
+}
+
+function atualizarIndicador() {
+    var $indicador = $('#indicador-preenchimento');
+    if (!$indicador.length) return;
+
+    if (MODO_CALCULO === 'aritmetica') {
+        $indicador.text('0 a 10 cada');
+        return;
+    }
+
+    var soma = 0;
+    $('#TabelaAvaliacoes tbody tr').not('#linha-nova-avaliacao').each(function () {
+        var texto = $(this).find('.editavel-avaliacao[data-campo="valor"]').text().trim().replace(',', '.');
+        var valor = parseFloat(texto);
+        if (!isNaN(valor)) soma += valor;
+    });
+
+    if (MODO_CALCULO === 'soma') {
+        $indicador.text(formatarPt(soma) + ' / 10,0');
+    } else if (MODO_CALCULO === 'ponderada') {
+        $indicador.text(formatarPt(soma) + '% / 100%');
+    }
+}
+
+function travarModo(valor) {
+    $('#filtro-modo').val(valor).prop('disabled', true).removeAttr('name');
+    $('#filtro-modo-hidden').val(valor).attr('name', 'modo');
+    $('#aviso-modo-travado').show();
+}
+
+function destravarModo() {
+    // Sem avaliação cadastrada protegendo o modo, o padrão é sempre "Selecione o modo" -
+    // mesmo que a disciplina já tenha um modo salvo de configurações anteriores, o
+    // professor escolhe de novo em vez de herdar um valor silenciosamente.
+    $('#filtro-modo').prop('disabled', false).attr('name', 'modo').val('');
+    $('#filtro-modo-hidden').removeAttr('name').val('');
+    $('#aviso-modo-travado').hide();
+}
+
+function aplicarTravaModoConformeDisciplina() {
+    var $opt = $('#filtro-disciplina').find('option:selected');
+    var modoAtual = $opt.data('modo');
+    var temAvaliacao = parseInt($opt.data('tem-avaliacao'), 10) > 0;
+
+    if ($opt.val() && modoAtual && temAvaliacao) {
+        travarModo(modoAtual);
+    } else {
+        destravarModo();
+    }
+}
+
+$('#filtro-disciplina').on('change', function () {
+    aplicarTravaModoConformeDisciplina();
+});
+
+$(document).on('click', '#link-trocar-modo', function (e) {
+    e.preventDefault();
+    var $opt = $('#filtro-disciplina').find('option:selected');
+    var disciplinaId = $opt.val();
+    if (!disciplinaId) return;
+
+    $('#nome-disciplina-modal-trocar').text($opt.text().trim());
+    $('#form-trocar-modo').attr('action', URL_RESETAR_MODO_TPL.replace('0', disciplinaId));
+    $('#modalTrocarModo').modal('show');
+});
 
 $(document).ready(function () {
+    if ($('#filtro-disciplina').length) {
+        aplicarTravaModoConformeDisciplina();
+    }
+
+    if (!$('#TabelaAvaliacoes').length) return;
+
     var table = $('#TabelaAvaliacoes').DataTable({
         language: {
             "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json"
         }
     });
 
-    function garantirLinhaVazia() {
-        if (table.rows().count() === 0 && !$('#linha-vazia-avaliacoes').length) {
-            table.row.add($('<tr id="linha-vazia-avaliacoes"><td colspan="4">Nenhuma avaliação encontrada</td></tr>')).draw(false);
-        }
-    }
-
-    function removerLinhaVazia() {
-        if ($('#linha-vazia-avaliacoes').length) {
-            table.row($('#linha-vazia-avaliacoes')).remove().draw(false);
-        }
-    }
+    atualizarIndicador();
 
     $('#btn-nova-avaliacao').on('click', function () {
         if ($('#linha-nova-avaliacao').length) return;
-        removerLinhaVazia();
+
+        if ($('#wrapper-vazio-avaliacoes').is(':visible')) {
+            $('#wrapper-vazio-avaliacoes').hide();
+            $('#wrapper-tabela-avaliacoes').show();
+            table.columns.adjust().draw(false);
+        }
 
         var linhaHtml =
             '<td><input type="text" class="form-control form-control-sm" id="novo-av-nome" placeholder="Nome"></td>' +
@@ -255,7 +473,7 @@ $(document).ready(function () {
                     '</div>' +
                 '</div>' +
             '</td>' +
-            '<td><input type="number" step="0.01" class="form-control form-control-sm" id="novo-av-valor" placeholder="Peso (%)"></td>' +
+            '<td><input type="number" step="0.01" class="form-control form-control-sm" id="novo-av-valor" placeholder="' + ROTULO_VALOR + '"></td>' +
             '<td>' +
                 '<div class="acoes-disciplina">' +
                     '<a href="#" class="icone-acao" id="btn-salvar-nova-avaliacao" title="Salvar"><i class="ti-check"></i></a>' +
@@ -270,7 +488,10 @@ $(document).ready(function () {
     $(document).on('click', '#btn-cancelar-nova-avaliacao', function (e) {
         e.preventDefault();
         table.row($('#linha-nova-avaliacao')).remove().draw(false);
-        garantirLinhaVazia();
+        if (table.rows().count() === 0) {
+            $('#wrapper-tabela-avaliacoes').hide();
+            $('#wrapper-vazio-avaliacoes').show();
+        }
     });
 
     $(document).on('click', '#btn-salvar-nova-avaliacao', function (e) {
@@ -320,6 +541,7 @@ $(document).ready(function () {
                 '<td>' + acoesHtml + '</td>';
 
             table.row.add($('<tr></tr>').html(linhaHtml)).draw(false);
+            atualizarIndicador();
         });
     });
 });
@@ -334,6 +556,10 @@ $(document).on('blur', '.editavel-avaliacao', function () {
     }, function (resp) {
         if (!resp.ok) {
             alert(resp.erro);
+            return;
+        }
+        if ($td.data('campo') === 'valor') {
+            atualizarIndicador();
         }
     });
 });

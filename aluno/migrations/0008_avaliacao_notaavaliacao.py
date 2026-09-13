@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('nome', models.CharField(max_length=50, verbose_name='Nome')),
-                ('tipo', models.CharField(choices=[('prova', 'Prova'), ('trabalho', 'Trabalho'), ('atividade_aula', 'Atividade em aula')], default='prova', verbose_name='Tipo')),
+                ('tipo', models.CharField(max_length=20, choices=[('prova', 'Prova'), ('trabalho', 'Trabalho'), ('atividade_aula', 'Atividade em aula')], default='prova', verbose_name='Tipo')),
                 ('valor', models.FloatField(blank=True, null=True, verbose_name='valor')),
                 ('disciplina', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='aluno.disciplina', verbose_name='Disciplina')),
             ],

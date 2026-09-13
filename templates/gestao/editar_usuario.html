@@ -60,7 +60,7 @@
                         <label class="col-sm-2 col-form-label">Perfil</label>
                         <div class="col-sm-10">
                             <select name="grupo" class="form-control" required>
-                                <option value="">Selecione o perfil</option>
+                                <option value="" disabled hidden {% if not grupo_atual %}selected{% endif %}>Selecione o perfil</option>
                                 {% for grupo in grupos %}
                                     <option value="{{ grupo.name }}" {% if grupo_atual and grupo.name == grupo_atual.name %}selected{% endif %}>
                                         {{ grupo.name|title }}

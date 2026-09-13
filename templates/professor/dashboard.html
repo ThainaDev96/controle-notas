@@ -1,0 +1,15 @@
+{% extends "base_sistema.html" %}
+
+{% block title %}Painel{% endblock %}
+{% block nav_painel %}active{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5>Painel</h5>
+    </div>
+    <div class="card-block">
+        <p>Bem-vindo(a), {{ request.user.first_name }}! Use o menu ao lado para lançar notas, cadastrar avaliações e acompanhar seus alunos.</p>
+    </div>
+</div>
+{% endblock %}

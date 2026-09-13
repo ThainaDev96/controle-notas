@@ -18,6 +18,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='nota',
             name='periodo',
-            field=models.CharField(choices=[('1_trimestre', '1° Trimestre'), ('2_trimestre', '2° Trimestre'), ('3_trimestre', '3° Trimestre')], default='1_trimestre', verbose_name='Período/Trimestre'),
+            field=models.CharField(max_length=20, choices=[('1_trimestre', '1° Trimestre'), ('2_trimestre', '2° Trimestre'), ('3_trimestre', '3° Trimestre')], default='1_trimestre', verbose_name='Período/Trimestre'),
         ),
     ]

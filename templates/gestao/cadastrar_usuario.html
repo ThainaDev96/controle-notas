@@ -60,7 +60,7 @@
                         <label class="col-sm-2 col-form-label">Perfil</label>
                         <div class="col-sm-10">
                             <select name="grupo" class="form-control" required>
-                                <option value="">Selecione o perfil</option>
+                                <option value="" disabled hidden selected>Selecione o perfil</option>
                                 {% for grupo in grupos %}
                                     <option value="{{ grupo.name }}">
                                         {{ grupo.name|title }}
