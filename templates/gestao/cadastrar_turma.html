@@ -37,6 +37,15 @@
                         </div>
                     </div>
 
+                    <!-- ANO -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Ano</label>
+                        <div class="col-sm-10">
+                            <input type="number" class="form-control" name="ano"
+                                value="{{ ano|default:'' }}" min="2000" max="2100" placeholder="Ano letivo" required>
+                        </div>
+                    </div>
+
                     <!-- DISCIPLINA -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Disciplina</label>

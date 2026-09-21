@@ -5,7 +5,7 @@ from django.urls import reverse
 from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao
 from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame
 from django.contrib.auth.models import User, Group
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from datetime import datetime
@@ -49,20 +49,25 @@ def listar_disciplinas(request):
 def professor_dashboard(request):
     return render(request, "professor/dashboard.html")
 
-def _recalcular_media_disciplina(aluno_id, disciplina_id, ano=None):
-    ano = ano or datetime.now().year
-    disciplina = Disciplina.objects.get(id=disciplina_id)
-    avaliacoes = list(Avaliacao.objects.filter(disciplina_id=disciplina_id, ano=ano))
-    notas_lancadas = {
-        na.avaliacao_id: na.nota
-        for na in NotaAvaliacao.objects.filter(aluno_id=aluno_id, avaliacao__in=avaliacoes)
-        if na.nota is not None
-    }
+def _avaliacoes_da_turma(turma):
+    # A avaliação é da disciplina; a turma herda as da disciplina dela.
+    return Avaliacao.objects.filter(disciplina_id=turma.disciplina_id)
 
+def _matricula_ativa(aluno_id, turma):
+    return get_object_or_404(Matricula, aluno_id=aluno_id, turma=turma, ativo=True)
+
+def _recalcular_media_disciplina(matricula):
+    turma = matricula.turma
+    disciplina = turma.disciplina
     nota, _ = Nota.objects.get_or_create(
-        aluno_id=aluno_id, disciplina_id=disciplina_id, ano=ano,
-        defaults={'situacao': 'cursando'}
+        matricula=matricula, defaults={'situacao': 'cursando'}
     )
+    avaliacoes = list(_avaliacoes_da_turma(turma))
+    notas_lancadas = {
+        na.avaliacao_id: na.nota_obtida
+        for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
+        if na.nota_obtida is not None
+    }
 
     if avaliacoes and len(notas_lancadas) == len(avaliacoes):
         notas_avaliacao = [(av, notas_lancadas[av.id]) for av in avaliacoes]
@@ -93,28 +98,32 @@ def lista_notas(request):
         turma_id      = request.session.get('filtro_notas_turma', '')
 
     disciplinas = Disciplina.objects.filter(ativo=True)
-    turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True) if disciplina_id else Turma.objects.none()
+    turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True).order_by('-ano', 'nome') if disciplina_id else Turma.objects.none()
 
     avaliacoes = []
     alunos_notas = []
     sem_avaliacoes = False
 
-    if disciplina_id and turma_id:
-        avaliacoes = list(Avaliacao.objects.filter(disciplina_id=disciplina_id, ano=datetime.now().year).order_by('id'))
+    turma_obj = Turma.objects.filter(id=turma_id, disciplina_id=disciplina_id).first() if disciplina_id and turma_id else None
+
+    if turma_obj:
+        avaliacoes = list(_avaliacoes_da_turma(turma_obj).order_by('id'))
         sem_avaliacoes = len(avaliacoes) == 0
 
         if not sem_avaliacoes:
             alunos = User.objects.filter(
-                turmas__id=turma_id, turmas__ativo=True
+                matricula__turma_id=turma_id, matricula__turma__ativo=True, matricula__ativo=True
             ).exclude(groups__name='professor').distinct().order_by('first_name')
 
-            notas_lancadas = {
-                (na.aluno_id, na.avaliacao_id): na.nota
-                for na in NotaAvaliacao.objects.filter(aluno__in=alunos, avaliacao__in=avaliacoes)
+            matriculas = {
+                m.aluno_id: m
+                for m in Matricula.objects.filter(turma=turma_obj, ativo=True)
             }
             resumos = {
-                n.aluno_id: n
-                for n in Nota.objects.filter(aluno__in=alunos, disciplina_id=disciplina_id, ano=datetime.now().year)
+                n.matricula.aluno_id: n
+                for n in Nota.objects.filter(
+                    matricula__in=matriculas.values()
+                ).select_related('matricula')
             }
 
             # Garante um registro Nota pra cada aluno matriculado, mesmo sem nenhuma
@@ -122,9 +131,15 @@ def lista_notas(request):
             for aluno in alunos:
                 if aluno.id not in resumos:
                     resumos[aluno.id], _ = Nota.objects.get_or_create(
-                        aluno_id=aluno.id, disciplina_id=disciplina_id, ano=datetime.now().year,
-                        defaults={'situacao': 'cursando'}
+                        matricula=matriculas[aluno.id], defaults={'situacao': 'cursando'}
                     )
+
+            notas_lancadas = {
+                (na.nota.matricula.aluno_id, na.avaliacao_id): na.nota_obtida
+                for na in NotaAvaliacao.objects.filter(
+                    nota__in=resumos.values(), avaliacao__in=avaliacoes
+                ).select_related('nota__matricula')
+            }
 
             situacao_display = {
                 'cursando': 'Cursando',
@@ -158,9 +173,15 @@ def lista_notas(request):
         "turma_selecionada":      turma_id,
     })
 
-def boletim_aluno(request):
-    notas = Nota.objects.filter(ativo=True, aluno=request.user)
+def _notas_do_aluno(aluno, ano=None):
+    notas = Nota.objects.filter(
+        matricula__aluno=aluno, matricula__ativo=True
+    ).select_related('matricula__turma__disciplina')
+    if ano:
+        notas = notas.filter(matricula__turma__ano=ano)
+    return notas
 
+def boletim_aluno(request):
     ano_selecionado = request.POST.get('ano', '')
 
     if request.method == 'POST':
@@ -168,12 +189,12 @@ def boletim_aluno(request):
     else:
         ano_selecionado = request.session.get('boletim_ano', str(datetime.now().year))
 
-    if ano_selecionado:
-        notas = notas.filter(ano=ano_selecionado)
+    notas = _notas_do_aluno(request.user, ano_selecionado)
 
-    anos = Nota.objects.filter(
-        ativo=True, aluno=request.user, ano__isnull=False
-    ).values_list('ano', flat=True).distinct().order_by('-ano')
+    turmas_aluno = Turma.objects.filter(matricula__aluno=request.user, matricula__ativo=True)
+
+    # O ano atual sempre aparece, mesmo para aluno ainda sem turma.
+    anos = sorted(set(turmas_aluno.values_list('ano', flat=True)) | {datetime.now().year}, reverse=True)
 
     total_aprovadas = notas.filter(situacao='aprovado').count()
     total_exame = notas.filter(situacao='exame').count()
@@ -186,18 +207,18 @@ def boletim_aluno(request):
     else:
         situacao_final = 'reprovado' if reprovadas > 2 else 'aprovado'
 
-    turma_aluno = Turma.objects.filter(
-        alunos=request.user
-    ).values_list('nome', flat=True).first()
+    if ano_selecionado:
+        turmas_aluno = turmas_aluno.filter(ano=ano_selecionado)
+    turma_aluno = turmas_aluno.values_list('nome', flat=True).first()
 
     resumos_calculo = []
     for nota in notas:
         if nota.media_final is None:
             continue
-        avaliacoes = Avaliacao.objects.filter(disciplina_id=nota.disciplina_id, ano=nota.ano).order_by('id')
+        avaliacoes = _avaliacoes_da_turma(nota.turma).order_by('id')
         notas_lancadas = {
-            na.avaliacao_id: na.nota
-            for na in NotaAvaliacao.objects.filter(aluno=request.user, avaliacao__in=avaliacoes)
+            na.avaliacao_id: na.nota_obtida
+            for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
         }
         notas_avaliacao = [(av, notas_lancadas.get(av.id)) for av in avaliacoes]
         resumo = montar_resumo_formula(nota.disciplina, notas_avaliacao)
@@ -226,8 +247,8 @@ def deletar_nota(request, id):
     return redirect("lista-notas")
 
 def editar_nota(request, id):
-    nota = get_object_or_404(Nota, id=id)
-    avaliacoes = Avaliacao.objects.filter(disciplina_id=nota.disciplina_id, ano=nota.ano).order_by('id')
+    nota = get_object_or_404(Nota.objects.select_related('matricula__turma__disciplina', 'matricula__aluno'), id=id)
+    avaliacoes = _avaliacoes_da_turma(nota.turma).order_by('id')
 
     if request.method == "POST":
         valores = {}
@@ -252,19 +273,19 @@ def editar_nota(request, id):
             messages.error(request, erro)
         else:
             for avaliacao_id, valor_float in valores.items():
-                nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(aluno_id=nota.aluno_id, avaliacao_id=avaliacao_id)
-                nota_avaliacao.nota = valor_float
+                nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
+                nota_avaliacao.nota_obtida = valor_float
                 nota_avaliacao.save()
 
-            _recalcular_media_disciplina(nota.aluno_id, nota.disciplina_id, ano=nota.ano)
+            _recalcular_media_disciplina(nota.matricula)
             messages.success(request, "Nota editada com sucesso!")
             return redirect("lista-notas")
 
-    turma_do_aluno = Turma.objects.filter(alunos=nota.aluno, disciplina=nota.disciplina).first()
+    turma_do_aluno = nota.turma
 
     notas_lancadas = {
-        na.avaliacao_id: na.nota
-        for na in NotaAvaliacao.objects.filter(aluno_id=nota.aluno_id, avaliacao__in=avaliacoes)
+        na.avaliacao_id: na.nota_obtida
+        for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
     }
     avaliacoes_com_nota = [
         {'avaliacao': av, 'valor': notas_lancadas.get(av.id)}
@@ -310,9 +331,12 @@ def cadastrar_notas(request):
             messages.error(request, "Selecione o aluno antes de salvar.")
         else:
             disciplina = get_object_or_404(Disciplina, id=disciplina_id)
+            turma = get_object_or_404(Turma, id=turma_id, disciplina_id=disciplina_id)
+            matricula = _matricula_ativa(aluno_id, turma)
+            nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
             valores = {}
             erro = None
-            for avaliacao in Avaliacao.objects.filter(disciplina_id=disciplina_id, ano=datetime.now().year):
+            for avaliacao in _avaliacoes_da_turma(turma):
                 valor = request.POST.get(f'nota_avaliacao_{avaliacao.id}')
                 if valor:
                     try:
@@ -332,16 +356,16 @@ def cadastrar_notas(request):
                 messages.error(request, erro)
             else:
                 for avaliacao_id, valor_float in valores.items():
-                    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(aluno_id=aluno_id, avaliacao_id=avaliacao_id)
-                    nota_avaliacao.nota = valor_float
+                    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
+                    nota_avaliacao.nota_obtida = valor_float
                     nota_avaliacao.save()
 
-                _recalcular_media_disciplina(aluno_id, disciplina_id)
+                _recalcular_media_disciplina(matricula)
                 messages.success(request, 'Notas cadastradas com sucesso!')
                 return redirect('cadastrar-notas')
 
     disciplinas = Disciplina.objects.filter(ativo=True)
-    turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True) if disciplina_id else Turma.objects.none()
+    turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True).order_by('-ano', 'nome') if disciplina_id else Turma.objects.none()
 
     disciplina_obj = Disciplina.objects.filter(id=disciplina_id).first() if disciplina_id else None
     turma_obj = Turma.objects.filter(id=turma_id).first() if turma_id else None
@@ -351,20 +375,24 @@ def cadastrar_notas(request):
     sem_avaliacoes = False
     notas_por_aluno_json = '{}'
 
-    if disciplina_id and turma_id:
-        avaliacoes = list(Avaliacao.objects.filter(disciplina_id=disciplina_id, ano=datetime.now().year).order_by('id'))
+    if turma_obj and str(turma_obj.disciplina_id) == str(disciplina_id):
+        avaliacoes = list(_avaliacoes_da_turma(turma_obj).order_by('id'))
         sem_avaliacoes = len(avaliacoes) == 0
 
         if not sem_avaliacoes:
             alunos = User.objects.filter(
-                turmas__id=turma_id, turmas__ativo=True
+                matricula__turma_id=turma_id, matricula__turma__ativo=True, matricula__ativo=True
             ).exclude(groups__name='professor').distinct().order_by('first_name')
 
             # Pré-carrega as notas já lançadas de cada aluno para não apagar
             # dados existentes quando o formulário for salvo com campos em branco.
             notas_por_aluno = {aluno.id: {} for aluno in alunos}
-            for na in NotaAvaliacao.objects.filter(aluno__in=alunos, avaliacao__in=avaliacoes):
-                notas_por_aluno[na.aluno_id][na.avaliacao_id] = na.nota
+            for na in NotaAvaliacao.objects.filter(
+                nota__matricula__turma=turma_obj, nota__matricula__ativo=True, avaliacao__in=avaliacoes
+            ).select_related('nota__matricula'):
+                aluno_da_nota = na.nota.matricula.aluno_id
+                if aluno_da_nota in notas_por_aluno:
+                    notas_por_aluno[aluno_da_nota][na.avaliacao_id] = na.nota_obtida
             notas_por_aluno_json = json.dumps(notas_por_aluno)
 
     return render(request, 'professor/cadastrar_notas.html', {
@@ -381,13 +409,13 @@ def cadastrar_notas(request):
         "turma_selecionada": turma_id,
     })
 
-def _validar_total_avaliacoes(disciplina, ano, valor_novo, excluir_id=None):
+def _validar_total_avaliacoes(disciplina, valor_novo, excluir_id=None):
     limite = disciplina.limite_valor_avaliacoes
     if limite is None:
         return None
 
     valor_novo = valor_novo or 0
-    total_atual = disciplina.total_valor_avaliacoes(ano, excluir_id=excluir_id)
+    total_atual = disciplina.total_valor_avaliacoes(excluir_id=excluir_id)
     novo_total = round(total_atual + valor_novo, 2)
 
     if novo_total > limite:
@@ -429,7 +457,7 @@ def configurar_avaliacoes(request):
             # existir, ou por outra tela que não passa por essa configuração), não há o
             # que "trocar" ainda: é a primeira configuração, então deixa salvar o modo.
             tem_avaliacoes = bool(disciplina_atual.modo_calculo) and \
-                disciplina_atual.avaliacao_set.filter(ano=datetime.now().year).exists()
+                disciplina_atual.avaliacao_set.exists()
             if tem_avaliacoes:
                 # Defesa em profundidade: o select de modo já vem travado no front-end
                 # quando a disciplina tem avaliação, então isso só ocorre em uso fora do padrão.
@@ -439,7 +467,7 @@ def configurar_avaliacoes(request):
             disciplina_atual.save()
 
         avaliacoes = Avaliacao.objects.select_related('disciplina').filter(
-            disciplina_id=disciplina_id, ano=datetime.now().year
+            disciplina_id=disciplina_id
         ).order_by('id')
 
         if avaliacoes:
@@ -450,7 +478,7 @@ def configurar_avaliacoes(request):
             resumo_exemplo = montar_resumo_formula(disciplina_atual, notas_exemplo)
 
     disciplinas = Disciplina.objects.filter(ativo=True).annotate(
-        total_avaliacoes_ano=Count('avaliacao', filter=Q(avaliacao__ano=datetime.now().year))
+        total_avaliacoes=Count('avaliacao')
     )
 
     return render(request, 'professor/configurar_avaliacoes.html', {
@@ -466,7 +494,7 @@ def configurar_avaliacoes(request):
 @require_POST
 def resetar_avaliacoes_modo(request, id):
     disciplina = get_object_or_404(Disciplina, id=id)
-    Avaliacao.objects.filter(disciplina=disciplina, ano=datetime.now().year).delete()
+    Avaliacao.objects.filter(disciplina=disciplina).delete()
 
     request.session['config_aval_disciplina'] = str(disciplina.id)
     request.session.pop('config_aval_modo', None)
@@ -499,7 +527,7 @@ def cadastrar_avaliacao(request):
             messages.error(request, "Defina o modo de cálculo dessa disciplina antes de cadastrar avaliações.")
             return redirect("configurar-avaliacoes")
 
-        erro = _validar_total_avaliacoes(disciplina, datetime.now().year, float(valor) if valor else 0)
+        erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
         if erro:
             messages.error(request, erro)
             return render(request, "professor/cadastrar_avaliacao.html", {
@@ -509,7 +537,7 @@ def cadastrar_avaliacao(request):
                 "valor": valor,
             })
 
-        Avaliacao.objects.create(nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id, ano=datetime.now().year)
+        Avaliacao.objects.create(nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id)
         messages.success(request, "Avaliação cadastrada com sucesso!")
         return redirect("configurar-avaliacoes")
 
@@ -527,7 +555,7 @@ def editar_avaliacao(request, id):
         disciplina_id = request.POST.get("disciplina")
         disciplina = get_object_or_404(Disciplina, id=disciplina_id)
 
-        erro = _validar_total_avaliacoes(disciplina, avaliacao.ano, float(valor) if valor else 0, excluir_id=avaliacao.id)
+        erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0, excluir_id=avaliacao.id)
         if erro:
             messages.error(request, erro)
             return render(request, "professor/editar_avaliacao.html", {
@@ -567,12 +595,12 @@ def cadastrar_avaliacao_ajax(request):
         return JsonResponse({'ok': False, 'erro': 'Informe o nome e a disciplina antes de salvar.'})
 
     disciplina = get_object_or_404(Disciplina, id=disciplina_id)
-    erro = _validar_total_avaliacoes(disciplina, datetime.now().year, float(valor) if valor else 0)
+    erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
     if erro:
         return JsonResponse({'ok': False, 'erro': erro})
 
     avaliacao = Avaliacao.objects.create(
-        nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id, ano=datetime.now().year
+        nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id
     )
 
     return JsonResponse({
@@ -596,7 +624,7 @@ def editar_avaliacao_ajax(request):
 
     if campo == 'valor':
         valor_float = float(valor) if valor else 0
-        erro = _validar_total_avaliacoes(avaliacao.disciplina, avaliacao.ano, valor_float, excluir_id=avaliacao.id)
+        erro = _validar_total_avaliacoes(avaliacao.disciplina, valor_float, excluir_id=avaliacao.id)
         if erro:
             return JsonResponse({'ok': False, 'erro': erro})
         avaliacao.valor = valor_float if valor else None
@@ -618,8 +646,9 @@ def alunos_por_turma(request):
         return JsonResponse({'alunos': []})
 
     alunos = User.objects.filter(
-        turmas__nome=turma_nome,
-        turmas__ativo=True
+        matricula__turma__nome=turma_nome,
+        matricula__turma__ativo=True,
+        matricula__ativo=True
     ).exclude(
         groups__name='professor'
     ).distinct().values('id', 'first_name', 'username').order_by('first_name')
@@ -646,7 +675,7 @@ def turmas_por_disciplina(request):
 
     turmas = Turma.objects.filter(
         disciplina_id=disciplina_id, ativo=True
-    ).values('id', 'nome')
+    ).order_by('-ano', 'nome').values('id', 'nome', 'ano')
 
     return JsonResponse({'turmas': list(turmas)})
 
@@ -657,6 +686,8 @@ def editar_nota_avaliacao_ajax(request):
     valor = request.POST.get('valor')
 
     avaliacao = get_object_or_404(Avaliacao, id=avaliacao_id)
+    turma = get_object_or_404(Turma, id=request.POST.get('turma'), disciplina_id=avaliacao.disciplina_id)
+    matricula = _matricula_ativa(aluno_id, turma)
 
     if valor:
         try:
@@ -670,11 +701,12 @@ def editar_nota_avaliacao_ajax(request):
     else:
         valor_float = None
 
-    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(aluno_id=aluno_id, avaliacao_id=avaliacao_id)
-    nota_avaliacao.nota = valor_float
+    nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
+    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
+    nota_avaliacao.nota_obtida = valor_float
     nota_avaliacao.save()
 
-    nota = _recalcular_media_disciplina(aluno_id, avaliacao.disciplina_id)
+    nota = _recalcular_media_disciplina(matricula)
 
     situacao_display = {
         'cursando': 'Cursando',
@@ -728,11 +760,11 @@ def gerar_relatorio(request):
     width, height = A4
     c = canvas.Canvas(response, pagesize=A4)
 
-    turma_aluno = Turma.objects.filter(
-        alunos=request.user
-    ).values_list('nome', flat=True).first()
-
     ano = request.session.get('boletim_ano', str(datetime.now().year))
+
+    turma_aluno = Turma.objects.filter(
+        matricula__aluno=request.user, matricula__ativo=True, ano=ano
+    ).values_list('nome', flat=True).first()
 
     # Cabeçalho
     c.setFont("Helvetica-Bold", 16)
@@ -754,7 +786,7 @@ def gerar_relatorio(request):
     c.line(72, y - 5, width - 72, y - 5)
 
     # Linhas de notas
-    notas = Nota.objects.filter(ativo=True, aluno=request.user, ano=ano)
+    notas = _notas_do_aluno(request.user, ano)
     y -= 25
     c.setFont("Helvetica", 10)
 
@@ -927,15 +959,17 @@ def cadastrar_turma(request):
     if request.method == 'POST':
         nome = request.POST.get('nome')
         disciplina_id = request.POST.get('disciplina')
+        ano = request.POST.get('ano')
 
-        if not nome or not disciplina_id:
-            messages.error(request, "Preencha o nome e selecione a disciplina antes de salvar.")
+        if not nome or not disciplina_id or not ano:
+            messages.error(request, "Preencha o nome, o ano e selecione a disciplina antes de salvar.")
             return render(request, "gestao/cadastrar_turma.html", {
                 "disciplinas": Disciplina.objects.filter(ativo=True),
                 "nome": nome,
+                "ano": ano,
             })
 
-        Turma.objects.create(nome=nome, disciplina_id=disciplina_id)
+        Turma.objects.create(nome=nome, disciplina_id=disciplina_id, ano=ano)
         messages.success(request, "Turma cadastrada com sucesso!")
         return redirect("gestao-turmas")
 
@@ -943,6 +977,7 @@ def cadastrar_turma(request):
 
     return render(request, "gestao/cadastrar_turma.html", {
         "disciplinas": disciplinas,
+        "ano": datetime.now().year,
     })
 
 def deletar_turma(request, id):
@@ -958,6 +993,7 @@ def editar_turma(request, id):
     if request.method == "POST":
         turma.nome = request.POST.get("nome")
         turma.disciplina_id = request.POST.get("disciplina")
+        turma.ano = request.POST.get("ano")
         turma.save()
         messages.success(request, "Turma editada com sucesso!")
         return redirect("gestao-turmas")

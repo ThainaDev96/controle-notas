@@ -172,7 +172,7 @@
                     {% else %}
                         <!-- ETAPA 2: LANÇAR NOTAS -->
                         <div class="mb-3">
-                            <span class="text-muted">{{ disciplina_obj.nome }} · Turma {{ turma_obj.nome }}</span>
+                            <span class="text-muted">{{ disciplina_obj.nome }} · Turma {{ turma_obj.nome }} · {{ turma_obj.ano }}</span>
                             <a href="{% url 'cadastrar-notas' %}?limpar=1" class="btn btn-secondary btn-sm ml-2">
                                 <i class="ti-close"></i> Trocar disciplina/turma
                             </a>
@@ -322,7 +322,7 @@ if (gateDisciplina) {
                 turmaSelect.disabled = false;
                 turmaSelect.innerHTML = '<option value="" disabled hidden selected>Selecione a turma</option>';
                 data.turmas.forEach(turma => {
-                    turmaSelect.innerHTML += `<option value="${turma.id}">${turma.nome}</option>`;
+                    turmaSelect.innerHTML += `<option value="${turma.id}">${turma.nome} · ${turma.ano}</option>`;
                 });
             });
     });

@@ -310,7 +310,7 @@
                 <div class="card-header-boletim w-100">
                     <div class="header-left">
                         <h5 class="mb-0">Boletim</h5>
-                        <span class="turma-badge">{{ turma_aluno }} · {{ ano_selecionado }}</span>
+                        <span class="turma-badge">{% if turma_aluno %}{{ turma_aluno }} · {% endif %}{{ ano_selecionado }}</span>
                     </div>
                     <div class="legenda">
                         <div class="legenda-item">

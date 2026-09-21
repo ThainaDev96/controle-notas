@@ -1,8 +1,6 @@
 from django.db import models
 from django.db.models import Sum
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 LIMITE_MODO_CALCULO = {'soma': 10, 'ponderada': 100}
 
@@ -33,8 +31,8 @@ class Disciplina(models.Model):
     def limite_valor_avaliacoes(self):
         return LIMITE_MODO_CALCULO.get(self.modo_calculo)
 
-    def total_valor_avaliacoes(self, ano, excluir_id=None):
-        qs = self.avaliacao_set.filter(ano=ano)
+    def total_valor_avaliacoes(self, excluir_id=None):
+        qs = self.avaliacao_set.all()
         if excluir_id:
             qs = qs.exclude(id=excluir_id)
         return qs.aggregate(total=Sum('valor'))['total'] or 0
@@ -43,8 +41,8 @@ class Disciplina(models.Model):
 class Turma(models.Model):
     nome = models.CharField(max_length=50, verbose_name="Nome")
     disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
-    alunos = models.ManyToManyField(User, related_name="turmas", verbose_name="Turmas")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    ano = models.PositiveIntegerField(verbose_name="Ano")
 
     def __str__(self):
         return f"{self.nome} - {self.disciplina.nome}"
@@ -52,16 +50,12 @@ class Turma(models.Model):
 
 class Matricula(models.Model):
     aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
-    turma = models.ForeignKey(Turma, on_delete=models.CASCADE, verbose_name="Disciplina")
+    turma = models.ForeignKey(Turma, on_delete=models.CASCADE, verbose_name="Turma")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
-
-    # def __str__(self):
-    #     return self.aluno
 
 
 class Nota(models.Model):
-    aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
-    disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
+    matricula = models.ForeignKey(Matricula, on_delete=models.CASCADE, verbose_name="Matrícula")
     situacao = models.CharField(max_length=20, choices=[
         ("aprovado", "Aprovado"),
         ("recuperacao", "Em recuperação"),
@@ -71,17 +65,26 @@ class Nota(models.Model):
     ], verbose_name="Situação")
     media_final = models.FloatField(verbose_name="Média Final", null=True, blank=True)
     nota_exame = models.FloatField(verbose_name="Nota do Exame", null=True, blank=True)
-    ativo = models.BooleanField(default=True, verbose_name="Ativo")
-    ano = models.PositiveIntegerField(verbose_name="Ano", null=True)
 
-    # def __str__(self):
-    #     return self.aluno
+    @property
+    def aluno(self):
+        return self.matricula.aluno
 
+    @property
+    def aluno_id(self):
+        return self.matricula.aluno_id
 
-@receiver(post_save, sender=Matricula)
-def vincular_aluno_turma(sender, instance, created, **kwargs):
-    if created:
-        instance.turma.alunos.add(instance.aluno)
+    @property
+    def turma(self):
+        return self.matricula.turma
+
+    @property
+    def disciplina(self):
+        return self.matricula.turma.disciplina
+
+    @property
+    def disciplina_id(self):
+        return self.matricula.turma.disciplina_id
 
 
 class Avaliacao(models.Model):
@@ -93,13 +96,12 @@ class Avaliacao(models.Model):
         ], verbose_name="Tipo", default="prova")
     valor = models.FloatField(verbose_name="valor", null=True, blank=True)
     disciplina = models.ForeignKey(Disciplina, on_delete=models.CASCADE, verbose_name="Disciplina")
-    ano = models.PositiveIntegerField(verbose_name="Ano", null=True, blank=True)
 
 
 class NotaAvaliacao(models.Model):
-    aluno = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Aluno")
+    nota = models.ForeignKey(Nota, on_delete=models.CASCADE, verbose_name="Nota")
     avaliacao = models.ForeignKey(Avaliacao, on_delete=models.CASCADE, verbose_name="Avaliação")
-    nota = models.FloatField(verbose_name="Nota", null=True, blank=True)
+    nota_obtida = models.FloatField(db_column='nota', verbose_name="Nota obtida", null=True, blank=True)
 
     class Meta:
-        unique_together = ('aluno', 'avaliacao')
+        unique_together = ('nota', 'avaliacao')

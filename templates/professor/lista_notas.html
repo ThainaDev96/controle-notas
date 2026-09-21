@@ -75,7 +75,7 @@
                                         {% for turma in turmas %}
                                             <option value="{{ turma.id }}"
                                                 {% if turma.id|stringformat:"s" == turma_selecionada %}selected{% endif %}>
-                                                {{ turma.nome }}
+                                                {{ turma.nome }} · {{ turma.ano }}
                                             </option>
                                         {% endfor %}
                                     {% else %}
@@ -212,7 +212,7 @@ $(document).ready(function () {
         $.get("{% url 'turmas-por-disciplina' %}", { disciplina: disciplina }, function (data) {
             $turma.prop('disabled', false).html('<option value="" disabled hidden selected>Selecione a turma</option>');
             data.turmas.forEach(function (t) {
-                $turma.append('<option value="' + t.id + '">' + t.nome + '</option>');
+                $turma.append('<option value="' + t.id + '">' + t.nome + ' · ' + t.ano + '</option>');
             });
         });
     });
@@ -223,6 +223,7 @@ $(document).on('blur', '.editavel', function () {
     $.post("{% url 'editar-nota-avaliacao-ajax' %}", {
         aluno: $td.data('aluno'),
         avaliacao: $td.data('avaliacao'),
+        turma: '{{ turma_selecionada }}',
         valor: $td.text().trim(),
         csrfmiddlewaretoken: '{{ csrf_token }}'
     }, function (resp) {

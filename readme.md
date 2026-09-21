@@ -113,3 +113,9 @@ Para simular os registros, foi criado uma função que lê os dados de um arquiv
 ```
 docker compose exec web python manage.py popular_dados
 ```
+## Backup do banco de dados
+
+```
+docker compose exec -T db pg_dump -U django_user -d django_db -Fc --no-owner --no-acl > controle_notas.dump
+
+```

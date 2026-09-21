@@ -13,7 +13,7 @@ O que mudou em relação à versão antiga (e por quê):
    deixava esse campo em branco, então nenhuma tela nova — cadastrar
    avaliação, configurar avaliações — funcionava com os dados gerados).
 4. Cria Avaliacao (uma ou mais por disciplina, no modo escolhido) e
-   NotaAvaliacao (uma por aluno x avaliação), respeitando os mesmos
+   NotaAvaliacao (uma por nota x avaliação), respeitando os mesmos
    limites que a tela usa (LIMITE_MODO_CALCULO / teto_nota_avaliacao).
 5. Calcula e grava media_final/situacao em Nota usando as MESMAS funções
    que as views usam (calcular_nota_final / classificar), em vez de deixar
@@ -188,19 +188,11 @@ class Command(BaseCommand):
     def popular_turmas(self):
         nome_turma = ["1A", "1B", "2A", "2B", "3A"]
 
-        alunos = list(User.objects.filter(groups__name="aluno"))
-        disciplinas = list(Disciplina.objects.all())
-
-        alunos_por_turma = len(alunos) // len(nome_turma)
-
-        for i, nome in enumerate(nome_turma):
-            inicio = i * alunos_por_turma
-            fim = inicio + alunos_por_turma if i < len(nome_turma) - 1 else len(alunos)
-            alunos_da_turma = alunos[inicio:fim]
-
-            for disciplina in disciplinas:
-                turma, _ = Turma.objects.get_or_create(nome=nome, disciplina=disciplina)
-                turma.alunos.set(alunos_da_turma)
+        for disciplina in Disciplina.objects.all():
+            for nome in nome_turma:
+                Turma.objects.get_or_create(
+                    nome=nome, disciplina=disciplina, defaults={'ano': datetime.now().year}
+                )
 
     def popular_matriculas(self):
         grupo_professor = Group.objects.get(name="professor")
@@ -216,11 +208,10 @@ class Command(BaseCommand):
                 Matricula.objects.get_or_create(aluno=aluno, turma=turma)
 
     def popular_avaliacoes(self):
-        ano = datetime.now().year
         for disciplina in Disciplina.objects.all():
             if not disciplina.modo_calculo:
                 continue  # Geografia, de propósito: fica sem avaliação nenhuma
-            if disciplina.avaliacao_set.filter(ano=ano).exists():
+            if disciplina.avaliacao_set.exists():
                 continue
             for cfg in CONFIG_AVALIACOES.get(disciplina.nome, []):
                 Avaliacao.objects.create(
@@ -228,43 +219,38 @@ class Command(BaseCommand):
                     tipo=cfg['tipo'],
                     valor=cfg['valor'],
                     disciplina=disciplina,
-                    ano=ano,
                 )
 
     def popular_notas(self):
-        ano = datetime.now().year
-        disciplinas = Disciplina.objects.all()
+        matriculas = Matricula.objects.filter(
+            ativo=True, aluno__groups__name="aluno"
+        ).select_related('aluno', 'turma__disciplina')
 
-        for disciplina in disciplinas:
-            avaliacoes = list(disciplina.avaliacao_set.filter(ano=ano))
-            alunos_da_disciplina = User.objects.filter(
-                turmas__disciplina=disciplina, groups__name="aluno"
-            ).distinct()
+        for matricula in matriculas:
+            disciplina = matricula.turma.disciplina
+            avaliacoes = list(disciplina.avaliacao_set.all())
 
-            for aluno in alunos_da_disciplina:
-                nota, _ = Nota.objects.get_or_create(
-                    aluno=aluno,
-                    disciplina=disciplina,
-                    ano=ano,
-                    defaults={"situacao": "cursando"},
+            nota, _ = Nota.objects.get_or_create(
+                matricula=matricula,
+                defaults={"situacao": "cursando"},
+            )
+
+            notas_avaliacao = []
+            for avaliacao in avaliacoes:
+                teto = avaliacao.valor if (disciplina.modo_calculo == 'soma' and avaliacao.valor) else 10
+                # Faixa larga (20% a 100% do teto) de propósito: com 206
+                # alunos, isso garante que apareçam os três resultados
+                # possíveis (aprovado, exame, reprovado) em cada
+                # disciplina configurada, em vez de só nota alta.
+                valor_nota = round(random.uniform(teto * 0.2, teto), 1)
+                NotaAvaliacao.objects.get_or_create(
+                    nota=nota,
+                    avaliacao=avaliacao,
+                    defaults={"nota_obtida": valor_nota},
                 )
+                notas_avaliacao.append((avaliacao, valor_nota))
 
-                notas_avaliacao = []
-                for avaliacao in avaliacoes:
-                    teto = avaliacao.valor if (disciplina.modo_calculo == 'soma' and avaliacao.valor) else 10
-                    # Faixa larga (20% a 100% do teto) de propósito: com 206
-                    # alunos, isso garante que apareçam os três resultados
-                    # possíveis (aprovado, exame, reprovado) em cada
-                    # disciplina configurada, em vez de só nota alta.
-                    valor_nota = round(random.uniform(teto * 0.2, teto), 1)
-                    NotaAvaliacao.objects.get_or_create(
-                        aluno=aluno,
-                        avaliacao=avaliacao,
-                        defaults={"nota": valor_nota},
-                    )
-                    notas_avaliacao.append((avaliacao, valor_nota))
-
-                if notas_avaliacao:
-                    nota.media_final = calcular_nota_final(disciplina, notas_avaliacao)
-                    nota.situacao = classificar(nota.media_final)
-                    nota.save(update_fields=['media_final', 'situacao'])
+            if notas_avaliacao:
+                nota.media_final = calcular_nota_final(disciplina, notas_avaliacao)
+                nota.situacao = classificar(nota.media_final)
+                nota.save(update_fields=['media_final', 'situacao'])

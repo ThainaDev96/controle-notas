@@ -25,6 +25,6 @@ class DisciplinaAdmin(admin.ModelAdmin):
 
 @admin.register(Nota)
 class NotaAdmin(admin.ModelAdmin):
-    list_display = ("aluno", "disciplina", "media_final", "nota_exame", "situacao")
-    search_fields = ("aluno", "disciplina")
-    list_filter = ("aluno", "disciplina")
+    list_display = ("matricula", "media_final", "nota_exame", "situacao")
+    search_fields = ("matricula__aluno__first_name", "matricula__aluno__username")
+    list_filter = ("situacao", "matricula__turma")

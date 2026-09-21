@@ -170,7 +170,7 @@
                                 <select id="filtro-disciplina" name="disciplina" class="form-control" required>
                                     <option value="" disabled hidden {% if not disciplina_selecionada %}selected{% endif %}>Selecione a disciplina</option>
                                     {% for disciplina in disciplinas %}
-                                        <option value="{{ disciplina.id }}" data-modo="{{ disciplina.modo_calculo|default_if_none:'' }}" data-tem-avaliacao="{{ disciplina.total_avaliacoes_ano }}"
+                                        <option value="{{ disciplina.id }}" data-modo="{{ disciplina.modo_calculo|default_if_none:'' }}" data-tem-avaliacao="{{ disciplina.total_avaliacoes }}"
                                             {% if disciplina.id|stringformat:"s" == disciplina_selecionada %}selected{% endif %}>
                                             {{ disciplina.nome }}
                                         </option>
@@ -341,7 +341,7 @@
                 </button>
             </div>
             <div class="modal-body">
-                Trocar o modo de cálculo de <strong id="nome-disciplina-modal-trocar"></strong> apaga todas as avaliações já cadastradas para essa disciplina neste ano, porque os campos significam coisas diferentes em cada modo e não podem ser reaproveitados automaticamente. Essa ação não pode ser desfeita.
+                Trocar o modo de cálculo de <strong id="nome-disciplina-modal-trocar"></strong> apaga todas as avaliações já cadastradas para essa disciplina, porque os campos significam coisas diferentes em cada modo e não podem ser reaproveitados automaticamente. Essa ação não pode ser desfeita.
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
