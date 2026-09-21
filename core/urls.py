@@ -55,7 +55,6 @@ urlpatterns = [
     path("usuario/editar/<int:id>/", views.editar_usuario, name="editar-usuario"),
     path("usuario/deletar/<int:id>/", views.deletar_usuario, name="deletar-usuario"),
     path("professor/configurar_avaliacoes/", views.configurar_avaliacoes, name="configurar-avaliacoes"),
-    path("avaliacao/resetar-modo/<int:id>/", views.resetar_avaliacoes_modo, name="resetar-avaliacoes-modo"),
     path("avaliacao/cadastrar/", views.cadastrar_avaliacao, name="cadastrar-avaliacao"),
     path("avaliacao/editar/<int:id>/", views.editar_avaliacao, name="editar-avaliacao"),
     path("avaliacao/deletar/<int:id>/", views.deletar_avaliacao, name="deletar-avaliacao"),

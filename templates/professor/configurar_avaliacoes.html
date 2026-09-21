@@ -191,7 +191,6 @@
                                 <input type="hidden" id="filtro-modo-hidden">
                                 <div id="aviso-modo-travado" class="text-muted mt-1" style="display: none;">
                                     Essa disciplina já tem avaliações cadastradas.
-                                    <a href="#" id="link-trocar-modo">Trocar o modo mesmo assim</a>
                                 </div>
                             </div>
                         </div>
@@ -211,7 +210,7 @@
 </div>
 <!-- FIM CARD DE FILTROS -->
 {% else %}
-<!-- RESUMO FIXO DA SELEÇÃO ATUAL (não editável), REGRA DE APROVAÇÃO E RESUMO DO CÁLCULO -->
+<!-- RESUMO FIXO DA SELEÇÃO ATUAL (não editável) -->
 <div class="row">
     <div class="col-sm-12">
         <div class="card">
@@ -227,24 +226,6 @@
         </div>
     </div>
 </div>
-{% if resumo_exemplo %}
-<div class="row">
-    <div class="col-sm-12">
-        {% include "partials/caixa-regra-aprovacao.html" %}
-    </div>
-</div>
-<div class="row">
-    <div class="col-sm-12">
-        <div class="card card-resumo-formula">
-            <div class="card-block">
-                <h6 class="regra-aprovacao-titulo"><i class="ti-calculator"></i> Como a fórmula do modo "{{ disciplina_atual.get_modo_calculo_display }}" funciona</h6>
-                <p class="text-muted mb-2">Exemplo com notas fictícias, usando as avaliações cadastradas para {{ disciplina_atual.nome }}:</p>
-                <div class="formula-exemplo">{{ resumo_exemplo.formula_texto }}</div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endif %}
 
 <!-- CARD DA TABELA -->
@@ -327,32 +308,29 @@
 </div>
 <!-- FIM CARD DA TABELA -->
 
-<!-- Modal de Confirmação -->
-{% include "partials/modal-confirmar-exclusao.html" %}
-
-<!-- Modal de Confirmação: trocar o modo de cálculo -->
-<div class="modal fade" id="modalTrocarModo" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Trocar o modo de cálculo</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                Trocar o modo de cálculo de <strong id="nome-disciplina-modal-trocar"></strong> apaga todas as avaliações já cadastradas para essa disciplina, porque os campos significam coisas diferentes em cada modo e não podem ser reaproveitados automaticamente. Essa ação não pode ser desfeita.
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <form method="POST" id="form-trocar-modo" action="">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">Sim, trocar o modo</button>
-                </form>
+<!-- REGRA DE APROVAÇÃO E RESUMO DO CÁLCULO (abaixo da tabela) -->
+{% if resumo_exemplo %}
+<div class="row">
+    <div class="col-sm-12">
+        {% include "partials/caixa-regra-aprovacao.html" %}
+    </div>
+</div>
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card card-resumo-formula">
+            <div class="card-block">
+                <h6 class="regra-aprovacao-titulo"><i class="ti-calculator"></i> Como a fórmula do modo "{{ disciplina_atual.get_modo_calculo_display }}" funciona</h6>
+                <p class="text-muted mb-2">Exemplo com notas fictícias, usando as avaliações cadastradas para {{ disciplina_atual.nome }}:</p>
+                <div class="formula-exemplo">{{ resumo_exemplo.formula_texto }}</div>
             </div>
         </div>
     </div>
 </div>
+{% endif %}
+
+<!-- Modal de Confirmação -->
+{% include "partials/modal-confirmar-exclusao.html" %}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -364,7 +342,6 @@
 
 <script>
 var URL_DELETAR_AVALIACAO_TPL = "{% url 'deletar-avaliacao' 0 %}";
-var URL_RESETAR_MODO_TPL = "{% url 'resetar-avaliacoes-modo' 0 %}";
 var ROTULO_VALOR = "{{ disciplina_atual.rotulo_valor|escapejs }}";
 var MODO_CALCULO = "{{ disciplina_atual.modo_calculo|escapejs }}";
 
@@ -424,17 +401,6 @@ function aplicarTravaModoConformeDisciplina() {
 
 $('#filtro-disciplina').on('change', function () {
     aplicarTravaModoConformeDisciplina();
-});
-
-$(document).on('click', '#link-trocar-modo', function (e) {
-    e.preventDefault();
-    var $opt = $('#filtro-disciplina').find('option:selected');
-    var disciplinaId = $opt.val();
-    if (!disciplinaId) return;
-
-    $('#nome-disciplina-modal-trocar').text($opt.text().trim());
-    $('#form-trocar-modo').attr('action', URL_RESETAR_MODO_TPL.replace('0', disciplinaId));
-    $('#modalTrocarModo').modal('show');
 });
 
 $(document).ready(function () {

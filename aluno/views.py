@@ -491,17 +491,6 @@ def configurar_avaliacoes(request):
         'resumo_exemplo': resumo_exemplo,
     })
 
-@require_POST
-def resetar_avaliacoes_modo(request, id):
-    disciplina = get_object_or_404(Disciplina, id=id)
-    Avaliacao.objects.filter(disciplina=disciplina).delete()
-
-    request.session['config_aval_disciplina'] = str(disciplina.id)
-    request.session.pop('config_aval_modo', None)
-
-    messages.success(request, f"Avaliações de {disciplina.nome} apagadas. Escolha o novo modo de cálculo.")
-    return redirect('configurar-avaliacoes')
-
 def cadastrar_avaliacao(request):
     if request.method == 'POST':
         nome = request.POST.get('nome')
