@@ -1,0 +1,58 @@
+<!-- Situação final (rosca): os selects e os números são preenchidos por static/js/dashboard.js -->
+<div class="card">
+    <div class="card-header">
+        <h5>Situação final</h5>
+        <span>Aprovados, em exame e reprovados da turma e disciplina escolhidas</span>
+    </div>
+    <div class="card-block">
+        <div class="row">
+            <div class="col-sm-6">
+                <div class="form-group">
+                    <label for="da-pizza-turma">Turma</label>
+                    <select id="da-pizza-turma" class="form-control">
+                        {% for turma in turmas %}
+                            <option value="{{ forloop.counter0 }}">{{ turma.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="form-group">
+                    <label for="da-pizza-disciplina">Disciplina</label>
+                    <select id="da-pizza-disciplina" class="form-control"></select>
+                </div>
+            </div>
+        </div>
+        <div class="da-escopo" id="da-pizza-escopo" aria-live="polite"></div>
+
+        <div class="da-pizza">
+            <div class="da-rosca">
+                <canvas id="da-rosca-canvas" width="160" height="160" role="img" aria-label="Situação final"></canvas>
+                <div class="da-rosca__centro">
+                    <span class="da-rosca__total" id="da-rosca-total">0</span>
+                    <span class="da-rosca__rotulo" id="da-rosca-rotulo">alunos</span>
+                </div>
+            </div>
+            <ul class="da-legenda">
+                <li>
+                    <span class="da-legenda__cor da-legenda__cor--aprovado"></span>
+                    <span>Aprovados</span>
+                    <span class="da-legenda__qtd" id="da-legenda-qtd-aprovado">0</span>
+                    <span class="da-legenda__pct" id="da-legenda-pct-aprovado">0,0%</span>
+                </li>
+                <li>
+                    <span class="da-legenda__cor da-legenda__cor--exame"></span>
+                    <span>Em exame</span>
+                    <span class="da-legenda__qtd" id="da-legenda-qtd-exame">0</span>
+                    <span class="da-legenda__pct" id="da-legenda-pct-exame">0,0%</span>
+                </li>
+                <li>
+                    <span class="da-legenda__cor da-legenda__cor--reprovado"></span>
+                    <span>Reprovados</span>
+                    <span class="da-legenda__qtd" id="da-legenda-qtd-reprovado">0</span>
+                    <span class="da-legenda__pct" id="da-legenda-pct-reprovado">0,0%</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>

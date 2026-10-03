@@ -133,6 +133,13 @@
         border-left-color: #03458F !important;
     }
 
+    /* Loader de carregamento da página - azul da marca em vez do turquesa/verde padrão do tema */
+    .theme-loader .ball-scale .contain .ring:first-child,
+    .theme-loader .ball-scale .contain .ring:first-child .frame {
+        border-left-color: #03458F;
+        border-right-color: #03458F;
+    }
+
 </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -268,6 +275,12 @@
                             </div>
                             <div class="pcoded-navigatio-lavel">Gestão</div>
                             <ul class="pcoded-item pcoded-left-item">
+                                <li class="{% block nav_dashboard_admin %}{% endblock %}">
+                                    <a href="{% url 'dashboard-admin' %}">
+                                        <span class="pcoded-micon"><i class="feather icon-bar-chart-2"></i></span>
+                                        <span class="pcoded-mtext">Dashboard</span>
+                                    </a>
+                                </li>
                                 <li class="pcoded-hasmenu {% block nav_academico_menu %}{% endblock %}">
                                     <a href="javascript:void(0)">
                                         <span class="pcoded-micon"><i class="feather icon-book"></i></span>

@@ -3,10 +3,10 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao
-from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame
+from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame, _fmt_pt
 from django.contrib.auth.models import User, Group
 from django.db.models import Count
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from datetime import datetime
 import json
@@ -27,7 +27,7 @@ def login_view(request):
 
             grupos = user.groups.values_list("name", flat=True)
             if "administrador" in grupos:
-                return redirect("gestao-dashboard")
+                return redirect("dashboard-admin")
 
             if "professor" in grupos:
                 return redirect("professor-dashboard")
@@ -818,8 +818,150 @@ def gerar_relatorio(request):
     c.save()
     return response
 
-def gestao_dashboard(request):
-    return render(request, "gestao/dashboard.html")
+# O total de cada disciplina vai de 0 a 10 nos três modos de cálculo.
+ESCALA_TOTAL = 10
+
+def _turmas_dashboard():
+    """Turmas ativas de disciplinas ativas."""
+    return Turma.objects.filter(ativo=True, disciplina__ativo=True)
+
+def _ano_dashboard(request, turmas):
+    """Anos letivos que têm turma e o ano escolhido em ?ano= (padrão: o ano atual, senão o mais recente)."""
+    ano_atual = datetime.now().year
+    anos = sorted(set(turmas.values_list('ano', flat=True)), reverse=True) or [ano_atual]
+
+    ano = request.GET.get('ano', '')
+    ano = int(ano) if ano.isdigit() else None
+    if ano not in anos:
+        ano = ano_atual if ano_atual in anos else anos[0]
+    return anos, ano
+
+def _registros_dashboard(ano):
+    """
+    Uma linha por matrícula ativa do ano letivo: aluno, turma, disciplina, total e situação.
+    O total e a situação são os já gravados em Nota (os mesmos que o boletim mostra);
+    nada é recalculado aqui.
+    """
+    matriculas = Matricula.objects.filter(
+        ativo=True, turma__in=_turmas_dashboard().filter(ano=ano)
+    ).select_related('aluno', 'turma__disciplina').order_by('aluno__first_name', 'turma__disciplina__nome')
+
+    notas = {n.matricula_id: n for n in Nota.objects.filter(matricula__in=matriculas)}
+
+    registros = []
+    for matricula in matriculas:
+        nota = notas.get(matricula.id)
+        registros.append({
+            'aluno_id': matricula.aluno_id,
+            'aluno': matricula.aluno.get_full_name() or matricula.aluno.username,
+            'turma': matricula.turma.nome,
+            'disciplina_id': matricula.turma.disciplina_id,
+            'disciplina': matricula.turma.disciplina.nome,
+            # Matrícula sem Nota ainda = nenhuma nota lançada, igual a "cursando".
+            'total': nota.media_final if nota else None,
+            'situacao': nota.situacao if nota else 'cursando',
+        })
+    return registros
+
+def _resumo_dashboard(registros):
+    """Média dos totais, alunos distintos e contagem por situação de um grupo de registros."""
+    totais = [r['total'] for r in registros if r['total'] is not None]
+    situacoes = [r['situacao'] for r in registros]
+    return {
+        'media': round(sum(totais) / len(totais), 1) if totais else None,
+        'alunos': len({r['aluno_id'] for r in registros}),
+        'aprovado': situacoes.count('aprovado'),
+        'exame': situacoes.count('exame'),
+        'reprovado': situacoes.count('reprovado'),
+    }
+
+def _media_texto(media):
+    return _fmt_pt(media) if media is not None else '-'
+
+def _resumo_por_turma(turmas_ano, registros):
+    """
+    No banco cada Turma é uma turma + disciplina; "Turma 3A" no dashboard são todas
+    as linhas de Turma com esse nome no ano letivo. Devolve cada turma com a média,
+    os alunos e o resumo de cada disciplina dela.
+    """
+    disciplinas_por_turma = {}
+    for turma in turmas_ano.select_related('disciplina').order_by('nome', 'disciplina__nome'):
+        disciplinas_por_turma.setdefault(turma.nome, {})[turma.disciplina_id] = turma.disciplina.nome
+
+    turmas = []
+    for nome, disciplinas in disciplinas_por_turma.items():
+        registros_turma = [r for r in registros if r['turma'] == nome]
+        resumo_turma = _resumo_dashboard(registros_turma)
+        turmas.append({
+            'nome': nome,
+            'media': resumo_turma['media'],
+            'media_texto': _media_texto(resumo_turma['media']),
+            'alunos': resumo_turma['alunos'],
+            'disciplinas': [
+                {
+                    'id': disciplina_id,
+                    'nome': disciplina_nome,
+                    **_resumo_dashboard([r for r in registros_turma if r['disciplina_id'] == disciplina_id]),
+                }
+                for disciplina_id, disciplina_nome in disciplinas.items()
+            ],
+        })
+    return turmas
+
+def _marcar_menor_media(cards):
+    """
+    O card de menor média fica em vermelho, como a barra de menor média.
+    Só vale quando há médias diferentes para comparar.
+    """
+    medias = {card['media'] for card in cards if card['media'] is not None}
+    menor_media = min(medias) if len(medias) > 1 else None
+    for card in cards:
+        card['menor_media'] = card['media'] is not None and card['media'] == menor_media
+
+def dashboard_admin(request):
+    if not request.user.is_authenticated:
+        return redirect('login')
+    if not request.user.groups.filter(name='administrador').exists():
+        return HttpResponseForbidden("Acesso restrito ao administrador.")
+
+    anos, ano = _ano_dashboard(request, _turmas_dashboard())
+    registros = _registros_dashboard(ano)
+    geral = _resumo_dashboard(registros)
+
+    turmas = _resumo_por_turma(_turmas_dashboard().filter(ano=ano), registros)
+    _marcar_menor_media(turmas)
+
+    disciplinas_ano = {d['id']: d['nome'] for turma in turmas for d in turma['disciplinas']}
+
+    dados_graficos = {
+        'escala': ESCALA_TOTAL,
+        'geral': {
+            'alunos': geral['alunos'],
+            'disciplinas': [
+                {
+                    'id': disciplina_id,
+                    'nome': disciplina_nome,
+                    **_resumo_dashboard([r for r in registros if r['disciplina_id'] == disciplina_id]),
+                }
+                for disciplina_id, disciplina_nome in sorted(disciplinas_ano.items(), key=lambda item: item[1])
+            ],
+        },
+        'turmas': turmas,
+    }
+
+    # Só quem está em exame: é com esses alunos que ainda dá para agir.
+    # A ordem é a que veio do banco (nome do aluno, depois disciplina).
+    alunos_risco = [r for r in registros if r['situacao'] == 'exame']
+
+    return render(request, "dashboard_admin.html", {
+        "anos":            anos,
+        "ano_selecionado": ano,
+        "media_geral":     _media_texto(geral['media']),
+        "total_alunos":    geral['alunos'],
+        "turmas":          turmas,
+        "dados_graficos":  dados_graficos,
+        "alunos_risco":    alunos_risco,
+    })
 
 def gestao_disciplinas(request):
     # 1. Busca inicial: todas as disciplinas ativas, já trazendo o professor junto

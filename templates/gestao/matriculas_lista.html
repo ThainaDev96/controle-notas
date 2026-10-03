@@ -9,6 +9,17 @@
 <link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
 <link rel="stylesheet" href="{% static 'assets/pages/data-table/css/buttons.dataTables.min.css' %}">
 <link rel="stylesheet" href="{% static 'vendor/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css' %}">
+<style>
+.btn-primary {
+    background-color: #03458F;
+    border-color: #03458F;
+}
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: #033a78;
+    border-color: #033a78;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -103,6 +114,7 @@
                                 <th>Matrícula</th>
                                 <th>Aluno</th>
                                 <th>Turma</th>
+                                <th>Ano</th>
                                 <th>Disciplina</th>
                                 <th>Ações</th>
                             </tr>
@@ -113,6 +125,7 @@
                                 <td>{{ matricula.aluno.username }}</td>
                                 <td>{{ matricula.aluno.first_name }}</td>
                                 <td>{{ matricula.turma.nome }}</td>
+                                <td>{{ matricula.turma.ano }}</td>
                                 <td>{{ matricula.turma.disciplina.nome }}</td>
                                 <td>
                                     {% url 'editar-matricula' matricula.id as url_editar %}

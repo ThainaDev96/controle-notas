@@ -17,6 +17,15 @@
     color: #1B3D93;
     margin-right: 4px;
 }
+.btn-primary {
+    background-color: #03458F;
+    border-color: #03458F;
+}
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: #033a78;
+    border-color: #033a78;
+}
 </style>
 {% endblock %}
 
@@ -173,8 +182,8 @@
                         <!-- ETAPA 2: LANÇAR NOTAS -->
                         <div class="mb-3">
                             <span class="text-muted">{{ disciplina_obj.nome }} · Turma {{ turma_obj.nome }} · {{ turma_obj.ano }}</span>
-                            <a href="{% url 'cadastrar-notas' %}?limpar=1" class="btn btn-secondary btn-sm ml-2">
-                                <i class="ti-close"></i> Trocar disciplina/turma
+                            <a href="{% url 'cadastrar-notas' %}?limpar=1" class="btn-filtrar-delicado ml-2">
+                                <i class="ti-close"></i> <span class="texto-sublinhado">Trocar disciplina/turma</span>
                             </a>
                         </div>
 

@@ -1,0 +1,36 @@
+<!-- CARD DA TABELA: recebe "titulo" e "subtitulo"; a lista vem em "alunos_risco" -->
+<div class="row">
+    <div class="col-sm-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>{{ titulo }}</h5>
+                <span>{{ subtitulo }}</span>
+            </div>
+            <div class="card-block">
+                <div class="table-responsive dt-responsive">
+                    <table id="TabelaAlunosRisco" class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Disciplina</th>
+                                <th>Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for registro in alunos_risco %}
+                            <tr>
+                                <td>{{ registro.aluno }}</td>
+                                <td>{{ registro.turma }}</td>
+                                <td>{{ registro.disciplina }}</td>
+                                <td><span class="da-pilula">Em exame</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- FIM CARD DA TABELA -->

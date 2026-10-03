@@ -1,0 +1,16 @@
+<!-- FILTRO -->
+<form method="get" action="{{ request.path }}" class="da-filtro">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="form-group">
+                <label for="da-ano">Ano letivo</label>
+                <select id="da-ano" name="ano" class="form-control">
+                    {% for ano in anos %}
+                        <option value="{{ ano }}" {% if ano == ano_selecionado %}selected{% endif %}>{{ ano }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</form>
+<!-- FIM FILTRO -->

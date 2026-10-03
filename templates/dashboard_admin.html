@@ -1,0 +1,159 @@
+{% extends "base_sistema.html" %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+{% block nav_dashboard_admin %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/datatables.net-bs4/css/dataTables.bootstrap4.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+
+{% include "partials/dashboard-filtro-ano.html" %}
+
+<!-- CARDS DE MÉDIA POR TURMA -->
+<div class="da-cards">
+    <div class="card da-card-media da-card-media--geral">
+        <div class="card-block">
+            <div class="da-card-media__rotulo">Média geral</div>
+            <div class="da-card-media__numero">{{ media_geral }}</div>
+            <div class="da-card-media__apoio">
+                Todas as turmas cadastradas: {{ turmas|length }} turma{{ turmas|length|pluralize }}, {{ total_alunos }} aluno{{ total_alunos|pluralize }}
+            </div>
+        </div>
+    </div>
+    {% for turma in turmas %}
+    <div class="card da-card-media{% if turma.menor_media %} da-card-media--menor{% endif %}"{% if turma.menor_media %} title="Menor média entre as turmas"{% endif %}>
+        <div class="card-block">
+            <div class="da-card-media__rotulo">Turma {{ turma.nome }}</div>
+            <div class="da-card-media__numero">{{ turma.media_texto }}</div>
+            <div class="da-card-media__apoio">Média do total | {{ turma.alunos }} aluno{{ turma.alunos|pluralize }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<!-- FIM CARDS DE MÉDIA POR TURMA -->
+
+<!-- GRÁFICOS -->
+<div class="row da-graficos">
+
+    <div class="col-xl-5 col-lg-6">
+        {% include "partials/dashboard-situacao-final.html" %}
+    </div>
+
+    <!-- Média por disciplina (barras) -->
+    <div class="col-xl-7 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Média por disciplina</h5>
+                <span>Média do total dos alunos em cada disciplina cadastrada</span>
+            </div>
+            <div class="card-block">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <label for="da-barras-turma">Turma</label>
+                            <select id="da-barras-turma" class="form-control">
+                                <option value="">Todas as turmas</option>
+                                {% for turma in turmas %}
+                                    <option value="{{ forloop.counter0 }}">{{ turma.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="da-escopo" id="da-barras-escopo" aria-live="polite"></div>
+
+                <div class="da-barras" id="da-barras-lista"></div>
+
+                <div class="da-nota text-muted">
+                    <span><span class="da-marca da-marca--reprovado"></span>Menor média</span>
+                    <span>Ordenado da menor para a maior média</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+<!-- FIM GRÁFICOS -->
+
+{% include "partials/dashboard-alunos-risco.html" with titulo="Alunos em risco" subtitulo="Alunos em exame, por turma e disciplina" %}
+
+<p class="da-rodape text-muted">
+    A situação final de cada aluno segue a regra de aprovação do sistema, em cada disciplina.
+</p>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/chart.js/js/Chart.js' %}"></script>
+<script src="{% static 'vendor/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
+
+{{ dados_graficos|json_script:"da-dados" }}
+<script src="{% static 'js/dashboard.js' %}"></script>
+
+<script>
+$(document).ready(function () {
+    // MÉDIA POR DISCIPLINA (barras em HTML/CSS)
+    var dados = Dashboard.dados;
+    var barrasTurma = document.getElementById('da-barras-turma');
+    var barrasLista = document.getElementById('da-barras-lista');
+
+    function atualizarBarras() {
+        var turma = dados.turmas[barrasTurma.value];   // valor vazio = todas as turmas
+        var escopo = turma || dados.geral;
+
+        $('#da-barras-escopo').text(
+            'Mostrando: ' + (turma ? 'Turma ' + turma.nome : 'todas as turmas') + ', ' + Dashboard.alunos(escopo.alunos)
+        );
+
+        // Da menor para a maior média; disciplina ainda sem nenhum total fica no fim, sem barra
+        var comMedia = escopo.disciplinas.filter(function (disciplina) {
+            return disciplina.media !== null;
+        }).sort(function (a, b) {
+            return a.media - b.media;
+        });
+        var semMedia = escopo.disciplinas.filter(function (disciplina) {
+            return disciplina.media === null;
+        });
+
+        $(barrasLista).empty();
+
+        if (!escopo.disciplinas.length) {
+            $('<p class="text-muted mb-0">').text('Nenhuma disciplina cadastrada neste ano letivo.').appendTo(barrasLista);
+            return;
+        }
+
+        comMedia.concat(semMedia).forEach(function (disciplina, indice) {
+            var temMedia = disciplina.media !== null;
+            var largura = temMedia ? Math.min(disciplina.media / dados.escala * 100, 100) : 0;
+
+            var preenchimento = $('<div class="da-barra__preenchimento">')
+                .toggleClass('da-barra__preenchimento--menor', temMedia && indice === 0)
+                .attr('data-largura', largura);
+
+            $('<div class="da-barra">')
+                .append($('<span class="da-barra__nome">').text(disciplina.nome).attr('title', disciplina.nome))
+                .append($('<div class="da-barra__trilho">').append(preenchimento))
+                .append($('<span class="da-barra__valor">').text(temMedia ? Dashboard.numero(disciplina.media) : '-'))
+                .appendTo(barrasLista);
+        });
+
+        // As barras nascem com largura zero e só depois recebem a largura final,
+        // para a transição do CSS animar o crescimento.
+        barrasLista.offsetWidth;
+        $(barrasLista).find('.da-barra__preenchimento').each(function () {
+            this.style.width = this.getAttribute('data-largura') + '%';
+        });
+    }
+
+    $(barrasTurma).on('change', atualizarBarras);
+    atualizarBarras();
+});
+</script>
+{% endblock %}
