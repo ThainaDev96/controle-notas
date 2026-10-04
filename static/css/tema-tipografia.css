@@ -1,0 +1,172 @@
+/*
+ * Tema de tipografia: troca a fonte do sistema e tira o negrito.
+ * Nada aqui mexe em cor, tamanho de letra ou espaçamento.
+ *
+ * Liga e desliga:
+ *   todas as regras começam com body.tema-tipografia. Enquanto o <body> tiver essa
+ *   classe, elas valem. Tirando a classe do <body>, nenhuma regra daqui casa mais e
+ *   o sistema volta à tipografia original do tema.
+ *
+ * Por que as regras ganham do tema sem !important:
+ *   cada regra repete o seletor que o tema (ou o Bootstrap) usa, com
+ *   "body.tema-tipografia" na frente. Isso deixa o seletor mais específico que o
+ *   original, então ele vence. O arquivo também é o último CSS carregado.
+ *
+ * Só há !important na seção 6, e lá está explicado por quê.
+ */
+
+/* A fonte vem do Google Fonts, nos três pesos usados. O @import tem que ser a
+   primeira instrução do arquivo e não pode ficar dentro de body.tema-tipografia;
+   sem a classe no <body> a fonte é baixada, mas não é usada.
+   Para trocar de fonte: mude o nome aqui e na variável --fonte-sistema logo abaixo. */
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500&display=swap");
+
+
+/* ---------- 1. Fonte e pesos do sistema ---------- */
+
+body.tema-tipografia {
+    --fonte-sistema: "Manrope";
+    --peso-titulo: 300;
+    --peso-texto: 400;
+    --peso-destaque: 500;
+
+    /* O tema define a fonte só no <body>; títulos, botões e campos herdam dele.
+       Os ícones têm fonte própria nas classes deles e não são afetados. */
+    font-family: var(--fonte-sistema), "Open Sans", sans-serif;
+    font-weight: var(--peso-texto);
+}
+
+/* O Bootstrap põe fonte própria nos balões de dica, que ficam soltos no <body> */
+body.tema-tipografia .tooltip,
+body.tema-tipografia .popover {
+    font-family: var(--fonte-sistema), "Open Sans", sans-serif;
+}
+
+
+/* ---------- 2. Título da página: 300 ---------- */
+
+body.tema-tipografia .main-body .page-wrapper .page-header-title h4,
+body.tema-tipografia .login-block h3 {
+    font-weight: var(--peso-titulo);
+}
+
+
+/* ---------- 3. Texto em geral: 400 ---------- */
+
+/* Rótulo de campo que a tela do boletim deixava em negrito */
+body.tema-tipografia .filtro-item label,
+body.tema-tipografia .nav-link,
+body.tema-tipografia .close {
+    font-weight: var(--peso-texto);
+}
+
+
+/* ---------- 4. Destaques: 500 ---------- */
+
+/* Marcação que o navegador e o Bootstrap deixam em negrito */
+body.tema-tipografia b,
+body.tema-tipografia strong,
+body.tema-tipografia dt,
+body.tema-tipografia optgroup,
+body.tema-tipografia kbd kbd {
+    font-weight: var(--peso-destaque);
+}
+
+/* Títulos: de card, de janela e os h1 a h6 soltos.
+   O título da página fica com 300 pela seção 2, que é mais específica. */
+body.tema-tipografia h1,
+body.tema-tipografia h2,
+body.tema-tipografia h3,
+body.tema-tipografia h4,
+body.tema-tipografia h5,
+body.tema-tipografia h6,
+body.tema-tipografia .h1,
+body.tema-tipografia .h2,
+body.tema-tipografia .h3,
+body.tema-tipografia .h4,
+body.tema-tipografia .h5,
+body.tema-tipografia .h6,
+body.tema-tipografia .card-title,
+body.tema-tipografia .modal-title,
+body.tema-tipografia .card .card-header h5 {
+    font-weight: var(--peso-destaque);
+}
+
+/* Menu lateral: item ativo e subitem ativo */
+body.tema-tipografia .pcoded .pcoded-navbar .pcoded-item > li.active > a,
+body.tema-tipografia .pcoded .pcoded-navbar[active-item-theme] .pcoded-item li .pcoded-submenu li.active > a,
+body.tema-tipografia .pcoded .pcoded-navbar[navbar-theme] .pcoded-item li .pcoded-submenu li.active > a,
+body.tema-tipografia .nav-link.active {
+    font-weight: var(--peso-destaque);
+}
+
+/* Botões: os do Bootstrap e os de ícone com texto sublinhado */
+body.tema-tipografia .btn,
+body.tema-tipografia .btn-filtrar-delicado,
+body.tema-tipografia .btn-filtrar,
+body.tema-tipografia .btn-download {
+    font-weight: var(--peso-destaque);
+}
+
+/* Cabeçalho de tabela, incluindo as do DataTables */
+body.tema-tipografia th,
+body.tema-tipografia table.dataTable thead th,
+body.tema-tipografia table.dataTable thead td {
+    font-weight: var(--peso-destaque);
+}
+
+/* Etiquetas */
+body.tema-tipografia .badge {
+    font-weight: var(--peso-destaque);
+}
+
+
+/* ---------- 5. Telas que têm estilo próprio com negrito ---------- */
+
+/* Dashboard */
+body.tema-tipografia .dashboard .da-card-media__rotulo,
+body.tema-tipografia .dashboard .da-card-media__numero,
+body.tema-tipografia .dashboard .da-escopo,
+body.tema-tipografia .dashboard .da-rosca__total,
+body.tema-tipografia .dashboard .da-legenda__qtd,
+body.tema-tipografia .dashboard .da-barra__valor,
+body.tema-tipografia .dashboard .da-pilula {
+    font-weight: var(--peso-destaque);
+}
+
+/* Boletim do aluno */
+body.tema-tipografia .badge-situacao,
+body.tema-tipografia .turma-badge,
+body.tema-tipografia .sf-label,
+body.tema-tipografia .sf-aprovado,
+body.tema-tipografia .sf-recuperacao,
+body.tema-tipografia .sf-reprovado,
+body.tema-tipografia .sf-cursando,
+body.tema-tipografia .sf-status-aprovado,
+body.tema-tipografia .sf-status-reprovado,
+body.tema-tipografia .sf-status-andamento,
+body.tema-tipografia .resumo-disciplina-nome,
+body.tema-tipografia .regra-aprovacao-titulo {
+    font-weight: var(--peso-destaque);
+}
+
+/* Configurar avaliações */
+body.tema-tipografia #indicador-preenchimento,
+body.tema-tipografia .badge-config-status {
+    font-weight: var(--peso-destaque);
+}
+
+
+/* ---------- 6. Onde o !important é inevitável ---------- */
+
+/* As classes utilitárias de negrito do Bootstrap já são declaradas com !important,
+   e um estilo escrito direto na tag (atributo style) ganha de qualquer seletor.
+   Nos dois casos só outro !important consegue vencer. */
+body.tema-tipografia .font-weight-bold,
+body.tema-tipografia .font-weight-bolder,
+body.tema-tipografia .fw-bold,
+body.tema-tipografia .fw-bolder,
+body.tema-tipografia .fw-semibold,
+body.tema-tipografia [style*="font-weight"] {
+    font-weight: var(--peso-destaque) !important;
+}

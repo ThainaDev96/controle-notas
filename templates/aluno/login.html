@@ -30,9 +30,11 @@
             border-right-color: #03458F;
         }
     </style>
+    <!-- Tipografia do sistema: fica por último para valer sobre o tema; só age com a classe tema-tipografia no body -->
+    <link rel="stylesheet" href="{% static 'css/tema-tipografia.css' %}">
 </head>
 
-<body class="fix-menu">
+<body class="fix-menu tema-tipografia">
     <!-- Pre-loader start -->
     <div class="theme-loader">
         <div class="ball-scale">

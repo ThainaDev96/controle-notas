@@ -172,9 +172,11 @@
 
 </style>
     {% block extra_css %}{% endblock %}
+    <!-- Tipografia do sistema: fica por último para valer sobre o tema; só age com a classe tema-tipografia no body -->
+    <link rel="stylesheet" href="{% static 'css/tema-tipografia.css' %}">
 </head>
 
-<body>
+<body class="tema-tipografia">
 
     <div class="theme-loader">
         <div class="ball-scale">
