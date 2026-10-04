@@ -1,0 +1,40 @@
+{% comment %}
+Campos de senha do cadastro e da edição de usuário: senha, confirmação, olho para mostrar o que
+foi digitado e as regras de criação da senha.
+Recebe: senha_obrigatoria (True no cadastro) e instrucoes_senha (lista de regras, vinda da view).
+{% endcomment %}
+<!-- SENHA -->
+<div class="form-group row">
+    <label class="col-sm-2 col-form-label">Senha</label>
+    <div class="col-sm-10">
+        <div style="position: relative;">
+            <input type="password" class="form-control" name="password" id="campo-senha" autocomplete="new-password"
+                placeholder="{% if senha_obrigatoria %}Senha de acesso{% else %}Deixe em branco para manter a senha atual{% endif %}" {% if senha_obrigatoria %}required{% endif %}>
+            <i class="icofont icofont-eye-blocked toggle-senha" data-alvo="campo-senha"
+                style="position: absolute; right: 10px; top: 10px; cursor: pointer; color: #999; font-size: 18px;"
+                title="Mostrar senha"></i>
+        </div>
+        <small class="form-text text-muted">
+            A senha deve seguir estas regras:
+            <ul class="mb-0" style="padding-left: 18px; list-style: disc;">
+                {% for regra in instrucoes_senha %}
+                    <li>{{ regra }}</li>
+                {% endfor %}
+            </ul>
+        </small>
+    </div>
+</div>
+
+<!-- CONFIRMAR SENHA -->
+<div class="form-group row">
+    <label class="col-sm-2 col-form-label">Confirmar senha</label>
+    <div class="col-sm-10">
+        <div style="position: relative;">
+            <input type="password" class="form-control" name="password2" id="campo-senha-confirmacao" autocomplete="new-password"
+                placeholder="Digite a senha novamente" {% if senha_obrigatoria %}required{% endif %}>
+            <i class="icofont icofont-eye-blocked toggle-senha" data-alvo="campo-senha-confirmacao"
+                style="position: absolute; right: 10px; top: 10px; cursor: pointer; color: #999; font-size: 18px;"
+                title="Mostrar senha"></i>
+        </div>
+    </div>
+</div>

@@ -5,7 +5,11 @@ from django.urls import reverse
 from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao
 from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame, _fmt_pt
 from django.contrib.auth.models import User, Group
-from django.db.models import Count
+from django.contrib.auth.password_validation import validate_password, password_validators_help_texts
+from django.core.exceptions import ValidationError
+from django.utils import translation
+from django.db import transaction
+from django.db.models import Count, Q
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from datetime import datetime
@@ -646,14 +650,16 @@ def alunos_por_turma(request):
 
 def disciplinas_por_turma(request):
     turma_nome = request.GET.get('turma')
+    ano = request.GET.get('ano', '')
     if not turma_nome:
         return JsonResponse({'disciplinas': []})
 
-    disciplinas = Disciplina.objects.filter(
-        turma__nome=turma_nome,
-        turma__ativo=True,
-        ativo=True
-    ).distinct().values('id', 'nome')
+    # As condições da turma ficam no mesmo filter() para valerem para a mesma linha de Turma
+    filtro = {'turma__nome': turma_nome, 'turma__ativo': True, 'ativo': True}
+    if ano.isdigit():
+        filtro['turma__ano'] = ano
+
+    disciplinas = Disciplina.objects.filter(**filtro).distinct().order_by('nome').values('id', 'nome')
 
     return JsonResponse({'disciplinas': list(disciplinas)})
 
@@ -873,6 +879,7 @@ def _resumo_dashboard(registros):
         'aprovado': situacoes.count('aprovado'),
         'exame': situacoes.count('exame'),
         'reprovado': situacoes.count('reprovado'),
+        'cursando': situacoes.count('cursando'),
     }
 
 def _media_texto(media):
@@ -1028,6 +1035,12 @@ def cadastrar_disciplina(request):
 
 def deletar_disciplina(request, id):
     disciplina = get_object_or_404(Disciplina, id=id)
+
+    # Disciplina com turma cadastrada não pode ser excluída, senão as turmas ficariam sem disciplina válida
+    if Turma.objects.filter(disciplina=disciplina, ativo=True).exists():
+        messages.error(request, "Essa disciplina possui turmas cadastradas e não pode ser excluída!")
+        return redirect("gestao-disciplinas")
+
     disciplina.ativo = False
     disciplina.save()
     messages.success(request, "Disciplina excluída com sucesso!")
@@ -1086,9 +1099,16 @@ def gestao_turmas(request):
     })
 
 
+def _turma_duplicada(nome, disciplina_id, ano, excluir_id=None):
+    """Já existe turma ativa com esse nome, nessa disciplina e nesse ano? (ignora maiúsculas/minúsculas)"""
+    turmas = Turma.objects.filter(nome__iexact=nome, disciplina_id=disciplina_id, ano=ano, ativo=True)
+    if excluir_id:
+        turmas = turmas.exclude(id=excluir_id)
+    return turmas.exists()
+
 def cadastrar_turma(request):
     if request.method == 'POST':
-        nome = request.POST.get('nome')
+        nome = (request.POST.get('nome') or '').strip()
         disciplina_id = request.POST.get('disciplina')
         ano = request.POST.get('ano')
 
@@ -1098,6 +1118,16 @@ def cadastrar_turma(request):
                 "disciplinas": Disciplina.objects.filter(ativo=True),
                 "nome": nome,
                 "ano": ano,
+                "disciplina_selecionada": disciplina_id,
+            })
+
+        if _turma_duplicada(nome, disciplina_id, ano):
+            messages.error(request, "Essa disciplina já está cadastrada para essa turma!")
+            return render(request, "gestao/cadastrar_turma.html", {
+                "disciplinas": Disciplina.objects.filter(ativo=True),
+                "nome": nome,
+                "ano": ano,
+                "disciplina_selecionada": disciplina_id,
             })
 
         Turma.objects.create(nome=nome, disciplina_id=disciplina_id, ano=ano)
@@ -1121,78 +1151,227 @@ def deletar_turma(request, id):
 def editar_turma(request, id):
     turma = get_object_or_404(Turma, id=id)
 
+    # A disciplina atual da turma sempre entra na lista. É uma proteção para dados antigos:
+    # se ela estiver excluída e ficar de fora, nenhuma opção fica marcada e o formulário
+    # abre mostrando outra disciplina.
+    disciplinas = Disciplina.objects.filter(Q(ativo=True) | Q(id=turma.disciplina_id))
+
     if request.method == "POST":
-        turma.nome = request.POST.get("nome")
+        turma.nome = (request.POST.get("nome") or "").strip()
         turma.disciplina_id = request.POST.get("disciplina")
         turma.ano = request.POST.get("ano")
+
+        duplicada = (
+            turma.nome and turma.disciplina_id and turma.ano
+            and _turma_duplicada(turma.nome, turma.disciplina_id, turma.ano, excluir_id=turma.id)
+        )
+        if duplicada:
+            messages.error(request, "Essa disciplina já está cadastrada para essa turma!")
+            # Não grava: volta para o formulário com o que foi digitado, para a pessoa corrigir
+            turma.disciplina_id = int(turma.disciplina_id)
+            return render(request, "gestao/editar_turma.html", {
+                "turma": turma,
+                "disciplinas": disciplinas,
+            })
+
         turma.save()
         messages.success(request, "Turma editada com sucesso!")
         return redirect("gestao-turmas")
-
-    disciplinas = Disciplina.objects.filter(ativo=True)
 
     return render(request, "gestao/editar_turma.html", {
         "turma": turma,
         "disciplinas": disciplinas,
     })
 
+def _disciplinas_da_turma(turma_nome, ano):
+    """
+    No banco cada linha de Turma é uma turma + disciplina. Devolve as linhas que formam
+    a turma desse nome nesse ano, uma por disciplina (mesmo critério de disciplinas_por_turma).
+    """
+    return Turma.objects.filter(nome=turma_nome, ano=ano, ativo=True, disciplina__ativo=True)
+
+def _outra_turma_no_ano(aluno_id, turma_nome, ano, ignorar_ids=()):
+    """
+    O aluno só pode estar em uma turma por ano. Devolve o nome de outra turma em que ele
+    já está matriculado nesse ano, ou None. ignorar_ids são as linhas da matrícula em edição.
+    """
+    return (
+        Matricula.objects.filter(aluno_id=aluno_id, turma__ano=ano, ativo=True)
+        .exclude(turma__nome=turma_nome)
+        .exclude(id__in=ignorar_ids)
+        .values_list('turma__nome', flat=True)
+        .first()
+    )
+
+def _contexto_cadastro_matricula(aluno_selecionado='', turma_selecionada='', ano_selecionado=None):
+    """Listas do formulário de matrícula e o que já estava escolhido, para voltar à tela após um erro."""
+    turmas_ativas = Turma.objects.filter(ativo=True)
+    anos = sorted(set(turmas_ativas.values_list('ano', flat=True)), reverse=True)
+
+    if ano_selecionado is None and datetime.now().year in anos:
+        ano_selecionado = datetime.now().year
+
+    return {
+        "alunos": User.objects.filter(groups__name='aluno'),
+        "turmas": sorted(set(turmas_ativas.values_list('nome', flat=True))),
+        "anos": anos,
+        "aluno_selecionado": aluno_selecionado,
+        "turma_selecionada": turma_selecionada,
+        "ano_selecionado": ano_selecionado,
+    }
+
 def cadastrar_matricula(request):
     if request.method == 'POST':
-        aluno_id = request.POST.get('aluno')
-        turma_id = request.POST.get('turma')
+        aluno_id = request.POST.get('aluno', '')
+        turma_nome = request.POST.get('turma', '')
+        ano = request.POST.get('ano', '')
 
-        if not aluno_id or not turma_id:
-            messages.error(request, "Selecione o aluno e a turma antes de salvar.")
-            return render(request, "gestao/cadastrar_matricula.html", {
-                "alunos": User.objects.filter(groups__name='aluno'),
-                "turmas": Turma.objects.filter(ativo=True).select_related("disciplina"),
-            })
+        contexto = _contexto_cadastro_matricula(
+            aluno_selecionado=aluno_id,
+            turma_selecionada=turma_nome,
+            ano_selecionado=int(ano) if ano.isdigit() else None,
+        )
 
-        existe_matricula = Matricula.objects.filter(aluno_id=aluno_id, turma_id=turma_id, ativo=True).first()
-        if existe_matricula:
+        if not aluno_id or not turma_nome or not ano.isdigit():
+            messages.error(request, "Selecione o aluno, a turma e o ano antes de salvar.")
+            return render(request, "gestao/cadastrar_matricula.html", contexto)
+
+        # O aluno é matriculado na turma; o sistema cria uma linha para cada disciplina dela.
+        turmas = list(_disciplinas_da_turma(turma_nome, ano))
+        if not turmas:
+            messages.error(request, "Esta turma ainda não tem disciplinas.")
+            return render(request, "gestao/cadastrar_matricula.html", contexto)
+
+        outra_turma = _outra_turma_no_ano(aluno_id, turma_nome, ano)
+        if outra_turma:
+            messages.error(request, f"Esse aluno já está matriculado na turma {outra_turma} em {ano}!")
+            return render(request, "gestao/cadastrar_matricula.html", contexto)
+
+        # Tudo ou nada: se a criação de alguma linha falhar, nenhuma fica gravada.
+        with transaction.atomic():
+            ja_matriculado = set(
+                Matricula.objects.filter(aluno_id=aluno_id, turma__in=turmas, ativo=True).values_list('turma_id', flat=True)
+            )
+            # Não duplica: só entram as disciplinas em que o aluno ainda não está
+            novas = [turma for turma in turmas if turma.id not in ja_matriculado]
+            for turma in novas:
+                Matricula.objects.create(aluno_id=aluno_id, turma_id=turma.id)
+
+        if not novas:
             messages.error(request, "Esse aluno já está matriculado nessa turma!")
-            return render(request, "gestao/cadastrar_matricula.html", {
-                "alunos": User.objects.filter(groups__name='aluno'),
-                "turmas": Turma.objects.filter(ativo=True).select_related("disciplina"),
-            })
+            return render(request, "gestao/cadastrar_matricula.html", contexto)
 
-        Matricula.objects.create(aluno_id=aluno_id, turma_id=turma_id)
-        messages.success(request, "Matrícula cadastrada com sucesso!")
+        messages.success(request, f"Aluno vinculado à turma {turma_nome}!")
         return redirect("gestao-matriculas")
 
-    alunos = User.objects.filter(groups__name='aluno')
-    turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
-
-    return render(request, "gestao/cadastrar_matricula.html", {
-        "alunos": alunos,
-        "turmas": turmas,
-    })
+    return render(request, "gestao/cadastrar_matricula.html", _contexto_cadastro_matricula())
 
 def deletar_matricula(request, id):
-    matricula = get_object_or_404(Matricula, id=id)
-    matricula.ativo = False
-    matricula.save()
-    messages.success(request, "Matrícula excluída com sucesso!")
+    matricula = get_object_or_404(Matricula.objects.select_related('turma'), id=id)
+
+    # Excluir desvincula o aluno da turma: saem todas as linhas de disciplina dessa turma nesse ano
+    Matricula.objects.filter(
+        aluno_id=matricula.aluno_id,
+        turma__nome=matricula.turma.nome,
+        turma__ano=matricula.turma.ano,
+        ativo=True,
+    ).update(ativo=False)
+
+    messages.success(request, f"Aluno removido da turma {matricula.turma.nome}!")
     return redirect("gestao-matriculas")
 
 def editar_matricula(request, id):
-    matricula = get_object_or_404(Matricula, id=id)
+    # O id é de uma das linhas de disciplina; a edição vale para a matrícula inteira do aluno na turma
+    matricula = get_object_or_404(Matricula.objects.select_related('turma'), id=id)
+    turma_atual = matricula.turma
 
     if request.method == "POST":
-        matricula.aluno_id = request.POST.get("aluno")
-        matricula.turma_id = request.POST.get("turma")
-        matricula.save()
-        messages.success(request, "Matrícula editada com sucesso!")
+        aluno_id = request.POST.get("aluno", "")
+        turma_nome = request.POST.get("turma", "")
+        ano = request.POST.get("ano", "")
+
+        contexto = _contexto_cadastro_matricula(
+            aluno_selecionado=aluno_id,
+            turma_selecionada=turma_nome,
+            ano_selecionado=int(ano) if ano.isdigit() else None,
+        )
+        contexto["matricula"] = matricula
+
+        if not aluno_id.isdigit() or not turma_nome or not ano.isdigit():
+            messages.error(request, "Selecione o aluno, a turma e o ano antes de salvar.")
+            return render(request, "gestao/editar_matricula.html", contexto)
+
+        turmas = list(_disciplinas_da_turma(turma_nome, ano))
+        if not turmas:
+            messages.error(request, "Esta turma ainda não tem disciplinas.")
+            return render(request, "gestao/editar_matricula.html", contexto)
+
+        # Tudo ou nada: se alguma linha falhar, nenhuma alteração fica gravada.
+        with transaction.atomic():
+            # Linhas atuais da matrícula: uma por disciplina da turma em que o aluno está hoje
+            linhas = list(Matricula.objects.filter(
+                aluno_id=matricula.aluno_id,
+                turma__nome=turma_atual.nome,
+                turma__ano=turma_atual.ano,
+                ativo=True,
+            ).select_related('turma'))
+            ids_linhas = [linha.id for linha in linhas]
+
+            # Um aluno só pode estar em uma turma por ano. A conferência vale quando a edição muda
+            # o aluno, a turma ou o ano; salvar sem mudar nada continua permitido.
+            mudou = (
+                aluno_id != str(matricula.aluno_id)
+                or turma_nome != turma_atual.nome
+                or int(ano) != turma_atual.ano
+            )
+            outra_turma = _outra_turma_no_ano(aluno_id, turma_nome, ano, ignorar_ids=ids_linhas) if mudou else None
+
+            # Disciplinas da turma escolhida em que o aluno escolhido já está por outra matrícula
+            ocupadas = set(
+                Matricula.objects.filter(aluno_id=aluno_id, turma__in=turmas, ativo=True)
+                .exclude(id__in=ids_linhas)
+                .values_list('turma_id', flat=True)
+            )
+            ja_matriculado = len(ocupadas) == len(turmas)
+
+            if not ja_matriculado and not outra_turma:
+                # Cada linha acompanha o aluno para a mesma disciplina na turma escolhida, como a
+                # edição sempre fez (a linha é atualizada, não recriada). Disciplina que a turma
+                # escolhida não tem é desvinculada; a que faltar é criada. Nada fica duplicado.
+                destino_por_disciplina = {turma.disciplina_id: turma for turma in turmas}
+                for linha in linhas:
+                    destino = destino_por_disciplina.get(linha.turma.disciplina_id)
+                    if destino and destino.id not in ocupadas:
+                        linha.aluno_id = aluno_id
+                        linha.turma_id = destino.id
+                        ocupadas.add(destino.id)
+                    else:
+                        linha.ativo = False
+                    linha.save()
+
+                for turma in turmas:
+                    if turma.id not in ocupadas:
+                        Matricula.objects.create(aluno_id=aluno_id, turma_id=turma.id)
+
+        if outra_turma:
+            messages.error(request, f"Esse aluno já está matriculado na turma {outra_turma} em {ano}!")
+            return render(request, "gestao/editar_matricula.html", contexto)
+
+        if ja_matriculado:
+            messages.error(request, "Esse aluno já está matriculado nessa turma!")
+            return render(request, "gestao/editar_matricula.html", contexto)
+
+        messages.success(request, f"Vínculo do aluno com a turma {turma_nome} atualizado!")
         return redirect("gestao-matriculas")
 
-    alunos = User.objects.filter(groups__name='aluno')
-    turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+    contexto = _contexto_cadastro_matricula(
+        aluno_selecionado=str(matricula.aluno_id),
+        turma_selecionada=turma_atual.nome,
+        ano_selecionado=turma_atual.ano,
+    )
+    contexto["matricula"] = matricula
 
-    return render(request, "gestao/editar_matricula.html", {
-        "matricula": matricula,
-        "alunos": alunos,
-        "turmas": turmas,
-    })
+    return render(request, "gestao/editar_matricula.html", contexto)
 
 def gestao_matriculas(request):
     matriculas = Matricula.objects.filter(ativo=True).select_related("aluno", "turma", "turma__disciplina")
@@ -1202,30 +1381,48 @@ def gestao_matriculas(request):
         request.session.pop('filtro_gestao_mat_aluno', None)
         return redirect('gestao-matriculas')
 
-    turma_id = request.POST.get('turma', '')
+    turma_nome = request.POST.get('turma', '')
     aluno_id = request.POST.get('aluno', '')
 
     if request.method == 'POST':
-        request.session['filtro_gestao_mat_turma'] = turma_id
+        request.session['filtro_gestao_mat_turma'] = turma_nome
         request.session['filtro_gestao_mat_aluno'] = aluno_id
     else:
-        turma_id = request.session.get('filtro_gestao_mat_turma', '')
+        turma_nome = request.session.get('filtro_gestao_mat_turma', '')
         aluno_id = request.session.get('filtro_gestao_mat_aluno', '')
 
-    if turma_id:
-        matriculas = matriculas.filter(turma_id=turma_id)
+    # O filtro de turma é pelo nome da turma ("3A"), não por turma + disciplina
+    todas_turmas = sorted(set(Turma.objects.filter(ativo=True).values_list('nome', flat=True)))
+    if turma_nome not in todas_turmas:
+        turma_nome = ''   # valor antigo guardado na sessão (era o id de uma linha de turma)
+
+    if turma_nome:
+        matriculas = matriculas.filter(turma__nome=turma_nome)
 
     if aluno_id:
         matriculas = matriculas.filter(aluno_id=aluno_id)
 
-    todas_turmas = Turma.objects.filter(ativo=True).select_related("disciplina")
+    # Uma linha por aluno, turma e ano: as linhas de cada disciplina são agrupadas aqui,
+    # na consulta, sem mudar nenhuma tabela.
+    grupos = {}
+    for matricula in matriculas.order_by('turma__disciplina__nome'):
+        chave = (matricula.aluno_id, matricula.turma.nome, matricula.turma.ano)
+        grupo = grupos.setdefault(chave, {
+            'id': matricula.id,
+            'aluno': matricula.aluno,
+            'turma_nome': matricula.turma.nome,
+            'ano': matricula.turma.ano,
+            'disciplinas': [],
+        })
+        grupo['disciplinas'].append(matricula.turma.disciplina.nome)
+
     alunos = User.objects.filter(groups__name='aluno')
 
     return render(request, "gestao/matriculas_lista.html", {
-        "matriculas":          matriculas,
+        "matriculas":          list(grupos.values()),
         "todas_turmas":        todas_turmas,
         "alunos":              alunos,
-        "turma_selecionada":   turma_id,
+        "turma_selecionada":   turma_nome,
         "aluno_selecionado":   aluno_id,
     })
 
@@ -1254,22 +1451,54 @@ def gestao_usuarios(request):
         "grupo_selecionado": grupo_nome,
     })
 
+def _instrucoes_senha():
+    """Regras de senha do sistema (AUTH_PASSWORD_VALIDATORS do settings), em português, para mostrar no formulário."""
+    with translation.override('pt-br'):
+        return [str(texto) for texto in password_validators_help_texts()]
+
+def _erros_senha(senha, confirmacao, usuario):
+    """
+    Erros da senha digitada: confirmação diferente ou alguma regra de AUTH_PASSWORD_VALIDATORS
+    não atendida. Lista vazia quando a senha pode ser usada.
+    """
+    if senha != confirmacao:
+        return ["As senhas digitadas não são iguais."]
+
+    # As mensagens do Django saem em português, mesmo com o sistema sem LANGUAGE_CODE definido
+    with translation.override('pt-br'):
+        try:
+            validate_password(senha, user=usuario)
+        except ValidationError as erro:
+            return list(erro.messages)
+    return []
+
 def cadastrar_usuario(request):
     grupos = Group.objects.filter(name__in=['aluno', 'professor', 'administrador'])
+    contexto = {"grupos": grupos, "instrucoes_senha": _instrucoes_senha()}
 
     if request.method == 'POST':
         username   = request.POST.get('username')
         first_name = request.POST.get('first_name')
         password   = request.POST.get('password')
+        password2  = request.POST.get('password2')
         grupo_nome = request.POST.get('grupo')
 
-        if not username or not first_name or not password or not grupo_nome:
+        # Se o formulário voltar com erro, mantém o que foi digitado (menos as senhas)
+        contexto.update({"username": username, "first_name": first_name, "grupo_selecionado": grupo_nome})
+
+        if not username or not first_name or not password or not password2 or not grupo_nome:
             messages.error(request, "Preencha todos os campos antes de salvar.")
-            return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+            return render(request, "gestao/cadastrar_usuario.html", contexto)
 
         if User.objects.filter(username=username).exists():
             messages.error(request, "Já existe um usuário com esse nome de usuário!")
-            return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+            return render(request, "gestao/cadastrar_usuario.html", contexto)
+
+        erros = _erros_senha(password, password2, User(username=username, first_name=first_name))
+        if erros:
+            for erro in erros:
+                messages.error(request, erro)
+            return render(request, "gestao/cadastrar_usuario.html", contexto)
 
         usuario = User.objects.create(username=username, first_name=first_name)
         usuario.set_password(password)
@@ -1279,7 +1508,7 @@ def cadastrar_usuario(request):
         messages.success(request, "Usuário cadastrado com sucesso!")
         return redirect("gestao-usuarios")
 
-    return render(request, "gestao/cadastrar_usuario.html", {"grupos": grupos})
+    return render(request, "gestao/cadastrar_usuario.html", contexto)
 
 def deletar_usuario(request, id):
     usuario = get_object_or_404(User, id=id)
@@ -1295,14 +1524,28 @@ def editar_usuario(request, id):
     if request.method == "POST":
         usuario.username = request.POST.get("username")
         usuario.first_name = request.POST.get("first_name")
+        grupo_nome = request.POST.get("grupo")
 
         password = request.POST.get("password")
-        if password:
+        password2 = request.POST.get("password2")
+
+        # A senha é opcional na edição: só é validada e trocada se algum dos dois campos vier preenchido
+        if password or password2:
+            erros = _erros_senha(password, password2, usuario)
+            if erros:
+                for erro in erros:
+                    messages.error(request, erro)
+                # Nada é gravado: volta para o formulário com o que foi digitado (menos as senhas)
+                return render(request, "gestao/editar_usuario.html", {
+                    "usuario":          usuario,
+                    "grupos":           grupos,
+                    "grupo_atual":      grupos.filter(name=grupo_nome).first() or usuario.groups.first(),
+                    "instrucoes_senha": _instrucoes_senha(),
+                })
             usuario.set_password(password)
 
         usuario.save()
 
-        grupo_nome = request.POST.get("grupo")
         usuario.groups.clear()
         usuario.groups.add(Group.objects.get(name=grupo_nome))
 
@@ -1312,7 +1555,8 @@ def editar_usuario(request, id):
     grupo_atual = usuario.groups.first()
 
     return render(request, "gestao/editar_usuario.html", {
-        "usuario":     usuario,
-        "grupos":      grupos,
-        "grupo_atual": grupo_atual,
+        "usuario":          usuario,
+        "grupos":           grupos,
+        "grupo_atual":      grupo_atual,
+        "instrucoes_senha": _instrucoes_senha(),
     })

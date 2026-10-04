@@ -1,0 +1,34 @@
+{% comment %} Mostra as disciplinas da turma escolhida no formulário de matrícula (cadastro e edição) {% endcomment %}
+<script>
+$(document).ready(function () {
+    var $turma = $('#campo-turma');
+    var $ano = $('#campo-ano');
+    var $bloco = $('#bloco-disciplinas');
+    var $lista = $('#lista-disciplinas');
+
+    function carregarDisciplinas() {
+        var turma = $turma.val();
+        var ano = $ano.val();
+
+        if (!turma || !ano) {
+            $bloco.hide();
+            return;
+        }
+
+        $.get("{% url 'disciplinas-por-turma' %}", { turma: turma, ano: ano }, function (data) {
+            $lista.empty();
+            if (!data.disciplinas.length) {
+                $lista.append($('<li>').text('Esta turma ainda não tem disciplinas.'));
+            }
+            data.disciplinas.forEach(function (d) {
+                $lista.append($('<li>').text(d.nome));
+            });
+            $bloco.show();
+        });
+    }
+
+    $turma.on('change', carregarDisciplinas);
+    $ano.on('change', carregarDisciplinas);
+    carregarDisciplinas();
+});
+</script>

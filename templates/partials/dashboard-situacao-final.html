@@ -1,8 +1,8 @@
-<!-- Situação final (rosca): os selects e os números são preenchidos por static/js/dashboard.js -->
+<!-- Situação dos alunos (rosca): os selects e os números são preenchidos por static/js/dashboard.js -->
 <div class="card">
     <div class="card-header">
-        <h5>Situação final</h5>
-        <span>Aprovados, em exame e reprovados da turma e disciplina escolhidas</span>
+        <h5>Situação dos alunos</h5>
+        <span>Aprovados, em exame, reprovados e cursando da turma e disciplina escolhidas</span>
     </div>
     <div class="card-block">
         <div class="row">
@@ -27,7 +27,7 @@
 
         <div class="da-pizza">
             <div class="da-rosca">
-                <canvas id="da-rosca-canvas" width="160" height="160" role="img" aria-label="Situação final"></canvas>
+                <canvas id="da-rosca-canvas" width="160" height="160" role="img" aria-label="Situação dos alunos"></canvas>
                 <div class="da-rosca__centro">
                     <span class="da-rosca__total" id="da-rosca-total">0</span>
                     <span class="da-rosca__rotulo" id="da-rosca-rotulo">alunos</span>
@@ -51,6 +51,12 @@
                     <span>Reprovados</span>
                     <span class="da-legenda__qtd" id="da-legenda-qtd-reprovado">0</span>
                     <span class="da-legenda__pct" id="da-legenda-pct-reprovado">0,0%</span>
+                </li>
+                <li>
+                    <span class="da-legenda__cor da-legenda__cor--cursando"></span>
+                    <span>Cursando</span>
+                    <span class="da-legenda__qtd" id="da-legenda-qtd-cursando">0</span>
+                    <span class="da-legenda__pct" id="da-legenda-pct-cursando">0,0%</span>
                 </li>
             </ul>
         </div>

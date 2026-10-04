@@ -1,0 +1,11 @@
+{% comment %} Olho da senha: mostra ou esconde o que foi digitado, igual ao da tela de login {% endcomment %}
+<script>
+$(document).on('click', '.toggle-senha', function () {
+    var campo = document.getElementById($(this).data('alvo'));
+    var visivel = campo.type === 'text';
+
+    campo.type = visivel ? 'password' : 'text';
+    $(this).toggleClass('icofont-eye-blocked', visivel).toggleClass('icofont-eye', !visivel);
+    this.title = visivel ? 'Mostrar senha' : 'Esconder senha';
+});
+</script>

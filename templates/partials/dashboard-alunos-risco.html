@@ -7,6 +7,14 @@
                 <span>{{ subtitulo }}</span>
             </div>
             <div class="card-block">
+                {% comment %} O texto segue a regra que está no código: calculo_notas.py (exame) e o boletim (reprovação de ano) {% endcomment %}
+                <div class="da-explicacao">
+                    <h6 class="da-explicacao__titulo"><i class="ti-info-alt"></i> Por que acompanhar esses alunos</h6>
+                    <p>
+                        Quem está em exame ainda pode ser aprovado na disciplina: a nota do exame é somada à nota final e dividida por dois, e o resultado precisa ser 6,0 ou mais. Se não alcançar, o aluno reprova na disciplina.
+                        O aluno é reprovado de ano quando reprova em mais de duas disciplinas; com até duas reprovações, é aprovado de ano.
+                    </p>
+                </div>
                 <div class="table-responsive dt-responsive">
                     <table id="TabelaAlunosRisco" class="table table-striped table-bordered">
                         <thead>

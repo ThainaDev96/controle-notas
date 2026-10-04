@@ -47,7 +47,7 @@
                         <label class="col-sm-2 col-form-label">Usuário</label>
                         <div class="col-sm-10">
                             <input type="text" class="form-control" name="username"
-                                placeholder="Nome de usuário (matrícula/login)" required>
+                                value="{{ username|default:'' }}" placeholder="Nome de usuário (matrícula/login)" required>
                         </div>
                     </div>
 
@@ -56,27 +56,20 @@
                         <label class="col-sm-2 col-form-label">Nome</label>
                         <div class="col-sm-10">
                             <input type="text" class="form-control" name="first_name"
-                                placeholder="Nome completo" required>
+                                value="{{ first_name|default:'' }}" placeholder="Nome completo" required>
                         </div>
                     </div>
 
-                    <!-- SENHA -->
-                    <div class="form-group row">
-                        <label class="col-sm-2 col-form-label">Senha</label>
-                        <div class="col-sm-10">
-                            <input type="password" class="form-control" name="password"
-                                placeholder="Senha de acesso" required>
-                        </div>
-                    </div>
+                    {% include "partials/campos-senha.html" with senha_obrigatoria=True %}
 
                     <!-- PERFIL -->
                     <div class="form-group row">
                         <label class="col-sm-2 col-form-label">Perfil</label>
                         <div class="col-sm-10">
                             <select name="grupo" class="form-control" required>
-                                <option value="" disabled hidden selected>Selecione o perfil</option>
+                                <option value="" disabled hidden {% if not grupo_selecionado %}selected{% endif %}>Selecione o perfil</option>
                                 {% for grupo in grupos %}
-                                    <option value="{{ grupo.name }}">
+                                    <option value="{{ grupo.name }}" {% if grupo.name == grupo_selecionado %}selected{% endif %}>
                                         {{ grupo.name|title }}
                                     </option>
                                 {% endfor %}
@@ -94,4 +87,8 @@
         </div><!-- card -->
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% include "partials/campos-senha-js.html" %}
 {% endblock %}

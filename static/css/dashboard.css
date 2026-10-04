@@ -16,6 +16,7 @@
     --da-vermelho: #B4244A;
     --da-azul-escuro: #022B59;
     --da-trilho: #E7ECF6;
+    --da-cursando: #D4A000;
 
     /* Sobe o conteúdo um pouco em relação ao respiro do tema, para os gráficos aparecerem mais cedo */
     margin-top: -14px;
@@ -194,6 +195,11 @@
     background: var(--da-vermelho);
 }
 
+/* Cursando usa o mesmo amarelo da legenda do boletim do aluno */
+.dashboard .da-legenda__cor--cursando {
+    background: var(--da-cursando);
+}
+
 .dashboard .da-legenda__qtd {
     font-weight: 700;
     text-align: right;
@@ -273,6 +279,24 @@
 }
 
 /* ---------- Alunos em risco ---------- */
+
+/* Explicação da regra de aprovação, no mesmo estilo da caixa "Regra de aprovação" das outras telas */
+.dashboard .da-explicacao {
+    margin-bottom: 16px;
+    padding: 12px 15px;
+    border: 1px solid #e0e6ed;
+    border-radius: 4px;
+}
+
+.dashboard .da-explicacao__titulo {
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: var(--da-azul);
+}
+
+.dashboard .da-explicacao p {
+    margin-bottom: 0;
+}
 
 .dashboard .da-pilula {
     display: inline-block;

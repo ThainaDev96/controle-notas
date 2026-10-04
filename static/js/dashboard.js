@@ -1,4 +1,4 @@
-// Comportamento do dashboard: ano letivo, rosca da situação final e tabela de alunos em risco.
+// Comportamento do dashboard: ano letivo, rosca da situação dos alunos e tabela de alunos em risco.
 // Tudo o que os gráficos precisam já vem calculado da view em <script id="da-dados">;
 // os selects de cada card só trocam qual pedaço desses dados está na tela.
 var Dashboard = {
@@ -17,15 +17,15 @@ $(document).ready(function () {
     Dashboard.dados = JSON.parse(document.getElementById('da-dados').textContent);
 
     var dados = Dashboard.dados;
-    var SITUACOES = ['aprovado', 'exame', 'reprovado'];
-    var CORES = ['#03458F', '#C4D0E9', '#B4244A'];
+    var SITUACOES = ['aprovado', 'exame', 'reprovado', 'cursando'];
+    var CORES = ['#03458F', '#C4D0E9', '#B4244A', '#D4A000'];
 
     // ANO LETIVO: recarrega a página com ?ano=, porque muda todos os cards de uma vez
     $('#da-ano').on('change', function () {
         this.form.submit();
     });
 
-    // SITUAÇÃO FINAL (rosca)
+    // SITUAÇÃO DOS ALUNOS (rosca)
     var pizzaTurma = document.getElementById('da-pizza-turma');
     var pizzaDisciplina = document.getElementById('da-pizza-disciplina');
     var roscaCanvas = document.getElementById('da-rosca-canvas');
@@ -34,9 +34,9 @@ $(document).ready(function () {
     var rosca = new Chart(roscaCanvas, {
         type: 'doughnut',
         data: {
-            labels: ['Aprovados', 'Em exame', 'Reprovados'],
+            labels: ['Aprovados', 'Em exame', 'Reprovados', 'Cursando'],
             datasets: [{
-                data: [0, 0, 0],
+                data: [0, 0, 0, 0],
                 backgroundColor: CORES,
                 hoverBackgroundColor: CORES,
                 borderWidth: 0
@@ -78,7 +78,7 @@ $(document).ready(function () {
         var valores = SITUACOES.map(function (situacao) {
             return disciplina ? disciplina[situacao] : 0;
         });
-        var total = valores[0] + valores[1] + valores[2];
+        var total = valores[0] + valores[1] + valores[2] + valores[3];
         var escopo = disciplina ? 'Turma ' + turma.nome + ', ' + disciplina.nome : 'nenhuma turma cadastrada';
 
         if (disciplina) {
@@ -96,8 +96,8 @@ $(document).ready(function () {
         });
 
         roscaCanvas.setAttribute('aria-label',
-            'Situação final, ' + escopo + '. Aprovados: ' + valores[0] +
-            ', em exame: ' + valores[1] + ', reprovados: ' + valores[2]);
+            'Situação dos alunos, ' + escopo + '. Aprovados: ' + valores[0] +
+            ', em exame: ' + valores[1] + ', reprovados: ' + valores[2] + ', cursando: ' + valores[3]);
 
         rosca.data.datasets[0].data = valores;
         rosca.update();

@@ -19,6 +19,38 @@
     background-color: #033a78;
     border-color: #033a78;
 }
+/* Disciplinas da matrícula: mesmo visual do dropdown da tabela de Configurar Avaliações */
+.disciplinas-dropdown-toggle {
+    background-color: transparent;
+    border: none;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333333;
+    cursor: pointer;
+}
+.disciplinas-dropdown-toggle:hover,
+.disciplinas-dropdown-toggle:focus {
+    background-color: #F3F3F3;
+    outline: none;
+    box-shadow: none;
+}
+.disciplinas-dropdown-toggle::after {
+    border-top-color: #1B3D93;
+}
+.disciplinas-dropdown-menu {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    min-width: 170px;
+}
+.disciplinas-dropdown-item {
+    display: block;
+    padding: 6px 10px;
+    font-size: 14px;
+    color: #333333;
+}
 </style>
 {% endblock %}
 
@@ -64,10 +96,10 @@
                                 <label for="filtro-turma">Turma</label>
                                 <select id="filtro-turma" name="turma" class="form-control">
                                     <option value="">Todas as turmas</option>
-                                    {% for turma in todas_turmas %}
-                                        <option value="{{ turma.id }}"
-                                            {% if turma.id|stringformat:"s" == turma_selecionada %}selected{% endif %}>
-                                            {{ turma.nome }} - {{ turma.disciplina.nome }}
+                                    {% for nome in todas_turmas %}
+                                        <option value="{{ nome }}"
+                                            {% if nome == turma_selecionada %}selected{% endif %}>
+                                            {{ nome }}
                                         </option>
                                     {% endfor %}
                                 </select>
@@ -115,22 +147,32 @@
                                 <th>Aluno</th>
                                 <th>Turma</th>
                                 <th>Ano</th>
-                                <th>Disciplina</th>
+                                <th>Disciplinas</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {% comment %} Cada linha é a matrícula do aluno na turma, com as disciplinas agrupadas pela view {% endcomment %}
                             {% for matricula in matriculas %}
                             <tr>
                                 <td>{{ matricula.aluno.username }}</td>
                                 <td>{{ matricula.aluno.first_name }}</td>
-                                <td>{{ matricula.turma.nome }}</td>
-                                <td>{{ matricula.turma.ano }}</td>
-                                <td>{{ matricula.turma.disciplina.nome }}</td>
+                                <td>{{ matricula.turma_nome }}</td>
+                                <td>{{ matricula.ano }}</td>
+                                <td>
+                                    <div class="dropdown">
+                                        <button type="button" class="disciplinas-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" aria-haspopup="true" aria-expanded="false">{{ matricula.disciplinas|length }} disciplina{{ matricula.disciplinas|length|pluralize }}</button>
+                                        <div class="dropdown-menu disciplinas-dropdown-menu">
+                                            {% for disciplina in matricula.disciplinas %}
+                                                <span class="disciplinas-dropdown-item">{{ disciplina }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </td>
                                 <td>
                                     {% url 'editar-matricula' matricula.id as url_editar %}
                                     {% url 'deletar-matricula' matricula.id as url_deletar %}
-                                    {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=matricula.aluno.first_name|add:" - "|add:matricula.turma.nome %}
+                                    {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=matricula.aluno.first_name|add:" - "|add:matricula.turma_nome %}
                                 </td>
                             </tr>
                             {% endfor %}
