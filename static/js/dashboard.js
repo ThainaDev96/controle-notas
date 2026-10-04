@@ -18,7 +18,7 @@ $(document).ready(function () {
 
     var dados = Dashboard.dados;
     var SITUACOES = ['aprovado', 'exame', 'reprovado'];
-    var CORES = ['#03458F', '#C4D0E9', '#C91E3C'];
+    var CORES = ['#03458F', '#C4D0E9', '#B4244A'];
 
     // ANO LETIVO: recarrega a página com ?ano=, porque muda todos os cards de uma vez
     $('#da-ano').on('change', function () {

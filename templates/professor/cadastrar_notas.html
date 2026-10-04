@@ -69,7 +69,7 @@
                         <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                             <i class="ti-info" style="font-size: 22px; color: #999;"></i>
                             <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
-                            <a href="{% url 'configurar-avaliacoes' %}" class="btn btn-primary btn-sm mt-2">Ir para Configurar Avaliações</a>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para Configurar Avaliações</span></a>
                         </div>
                     {% else %}
                         <form method="post" action="{% url 'editar-nota' nota.pk %}">
@@ -134,8 +134,8 @@
 
                             <!-- BOTÕES -->
                             <div>
-                                <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
-                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                                <a href="{% url 'lista-notas' %}" class="btn-filtrar-delicado btn-delicado-vermelho" style="float: right; margin-right: 16px;"><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></a>
+                                <button type="submit" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
                             </div>
                         </form>
                     {% endif %}
@@ -169,14 +169,14 @@
                             </div>
 
                             <div>
-                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Continuar</button>
+                                <button type="submit" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"><i class="ti-arrow-right"></i> <span class="texto-sublinhado">Continuar</span></button>
                             </div>
                         </form>
                     {% elif sem_avaliacoes %}
                         <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                             <i class="ti-info" style="font-size: 22px; color: #999;"></i>
                             <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
-                            <a href="{% url 'configurar-avaliacoes' %}" class="btn btn-primary btn-sm mt-2">Ir para Configurar Avaliações</a>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para Configurar Avaliações</span></a>
                         </div>
                     {% else %}
                         <!-- ETAPA 2: LANÇAR NOTAS -->
@@ -241,8 +241,8 @@
 
                             <!-- BOTÕES -->
                             <div>
-                                <a href="{% url 'lista-notas' %}" class="btn btn-out btn-danger btn-square" style="float: right; margin-right: 16px;">Cancelar</a>
-                                <button type="submit" class="btn btn-out btn-primary btn-square" style="float: right; margin-right: 16px;">Salvar</button>
+                                <a href="{% url 'lista-notas' %}" class="btn-filtrar-delicado btn-delicado-vermelho" style="float: right; margin-right: 16px;"><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></a>
+                                <button type="submit" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
                             </div>
                         </form>
                     {% endif %}

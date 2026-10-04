@@ -83,7 +83,8 @@
         background-color: #03458F !important;
     }
 
-    /* Botão "Filtrar" e link "Limpar filtros" (visual delicado: ícone + texto sublinhado, sem fundo) */
+    /* Botão padrão do sistema (Filtrar, Salvar, Novo, etc.) e link "Limpar filtros":
+       visual delicado, com ícone + texto sublinhado, sem fundo */
     .btn-filtrar-delicado {
         background: transparent;
         border: none;
@@ -93,16 +94,45 @@
         gap: 6px;
         color: #03458F;
         font-size: 15px;
+        text-decoration: none;
         cursor: pointer;
         transition: color .15s ease;
     }
-    .btn-filtrar-delicado .texto-sublinhado {
+    /* O segundo seletor é para o botão dentro do cabeçalho de um card: lá o tema
+       deixa todo <span> cinza, pequeno e em bloco, e isso apagava a cor do texto */
+    .btn-filtrar-delicado .texto-sublinhado,
+    .card .card-header .btn-filtrar-delicado .texto-sublinhado {
+        display: inline;
+        margin: 0;
+        color: inherit;
+        font-size: inherit;
         text-decoration: underline;
         text-underline-offset: 4px;
     }
     .btn-filtrar-delicado:hover,
     .btn-filtrar-delicado:hover i {
         color: #022f61;
+        text-decoration: none;
+    }
+    /* Mesmo botão em vermelho, para cancelar e excluir */
+    .btn-filtrar-delicado.btn-delicado-vermelho {
+        color: #B4244A;
+    }
+    .btn-filtrar-delicado.btn-delicado-vermelho:hover,
+    .btn-filtrar-delicado.btn-delicado-vermelho:hover i {
+        color: #9D1F40;
+    }
+    /* Mesmo botão para "Novo/Nova ..." das listas, só que no azul mais escuro */
+    .btn-filtrar-delicado.btn-delicado-novo {
+        color: #033A78;
+    }
+    .btn-filtrar-delicado.btn-delicado-novo:hover,
+    .btn-filtrar-delicado.btn-delicado-novo:hover i {
+        color: #022B59;
+    }
+    /* Respiro entre "Cancelar" e "Sim, excluir" na janela de confirmação */
+    #modalDeletar .modal-footer {
+        gap: 20px;
     }
     .link-limpar-filtros {
         font-size: 13px;
