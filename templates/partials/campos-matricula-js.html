@@ -1,11 +1,44 @@
-{% comment %} Mostra as disciplinas da turma escolhida no formulário de matrícula (cadastro e edição) {% endcomment %}
+{% comment %} Comportamento do formulário de matrícula (cadastro e edição): aluno digitado, turmas do ano e disciplinas da turma {% endcomment %}
 <script>
 $(document).ready(function () {
-    var $turma = $('#campo-turma');
+    var $aluno = $('#campo-aluno');
+    var $alunoId = $('#campo-aluno-id');
     var $ano = $('#campo-ano');
+    var $turma = $('#campo-turma');
     var $bloco = $('#bloco-disciplinas');
     var $lista = $('#lista-disciplinas');
+    var turmasPorAno = JSON.parse(document.getElementById('turmas-por-ano').textContent);
 
+    // ALUNO: o texto digitado precisa ser um dos alunos sugeridos; o id dele vai no campo escondido
+    function conferirAluno() {
+        var texto = $aluno.val();
+        var $opcao = $('#lista-alunos option').filter(function () {
+            return this.value === texto;
+        }).first();
+
+        $alunoId.val($opcao.length ? $opcao.data('id') : '');
+        $aluno[0].setCustomValidity($opcao.length || !texto ? '' : 'Escolha um aluno da lista de sugestões.');
+    }
+
+    // TURMA: a lista mostra só as turmas que existem no ano escolhido
+    function preencherTurmas() {
+        var escolhida = $turma.val();
+        var nomes = turmasPorAno[$ano.val()] || [];
+        var $vazia = $('<option value="" disabled hidden>').text('Selecione a turma');
+
+        $turma.empty().append($vazia);
+        nomes.forEach(function (nome) {
+            $turma.append($('<option>').val(nome).text(nome));
+        });
+
+        if (nomes.indexOf(escolhida) >= 0) {
+            $turma.val(escolhida);
+        } else {
+            $vazia.prop('selected', true);
+        }
+    }
+
+    // DISCIPLINAS: lista somente leitura das disciplinas da turma escolhida naquele ano
     function carregarDisciplinas() {
         var turma = $turma.val();
         var ano = $ano.val();
@@ -27,8 +60,14 @@ $(document).ready(function () {
         });
     }
 
+    $aluno.on('input change', conferirAluno);
+    $ano.on('change', function () {
+        preencherTurmas();
+        carregarDisciplinas();
+    });
     $turma.on('change', carregarDisciplinas);
-    $ano.on('change', carregarDisciplinas);
+
+    conferirAluno();
     carregarDisciplinas();
 });
 </script>

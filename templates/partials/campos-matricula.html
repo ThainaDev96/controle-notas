@@ -1,41 +1,29 @@
 {% comment %}
 Campos do formulário de matrícula, usados no cadastro e na edição.
-A turma é escolhida só pelo nome e pelo ano; o aluno fica vinculado a todas as disciplinas dela.
-Espera no contexto: alunos, turmas (nomes), anos, aluno_selecionado, turma_selecionada, ano_selecionado.
+O aluno é digitado (com sugestões); o ano vem antes e define quais turmas aparecem.
+O aluno fica vinculado a todas as disciplinas da turma escolhida.
+Espera no contexto: alunos, anos, turmas (nomes do ano escolhido), turmas_por_ano,
+aluno_selecionado, turma_selecionada, ano_selecionado.
 {% endcomment %}
-<!-- ALUNO -->
+<!-- ALUNO: digitado, com sugestões; o id do aluno escolhido vai no campo escondido -->
 <div class="form-group row">
-    <label class="col-sm-2 col-form-label">Aluno</label>
+    <label class="col-sm-2 col-form-label" for="campo-aluno">Aluno</label>
     <div class="col-sm-10">
-        <select name="aluno" class="form-control" required>
-            <option value="" disabled hidden {% if not aluno_selecionado %}selected{% endif %}>Selecione o aluno</option>
+        <input type="text" id="campo-aluno" class="form-control" list="lista-alunos" autocomplete="off" required
+            placeholder="Digite o nome ou a matrícula do aluno"
+            value="{% for aluno in alunos %}{% if aluno.id|stringformat:'s' == aluno_selecionado %}{{ aluno.first_name }} ({{ aluno.username }}){% endif %}{% endfor %}">
+        <input type="hidden" name="aluno" id="campo-aluno-id" value="{{ aluno_selecionado }}">
+        <datalist id="lista-alunos">
             {% for aluno in alunos %}
-                <option value="{{ aluno.id }}" {% if aluno.id|stringformat:"s" == aluno_selecionado %}selected{% endif %}>
-                    {{ aluno.first_name }}
-                </option>
+                <option value="{{ aluno.first_name }} ({{ aluno.username }})" data-id="{{ aluno.id }}"></option>
             {% endfor %}
-        </select>
+        </datalist>
     </div>
 </div>
 
-<!-- TURMA -->
+<!-- ANO: escolhido primeiro, define quais turmas aparecem -->
 <div class="form-group row">
-    <label class="col-sm-2 col-form-label">Turma</label>
-    <div class="col-sm-10">
-        <select name="turma" id="campo-turma" class="form-control" required>
-            <option value="" disabled hidden {% if not turma_selecionada %}selected{% endif %}>Selecione a turma</option>
-            {% for nome in turmas %}
-                <option value="{{ nome }}" {% if nome == turma_selecionada %}selected{% endif %}>
-                    {{ nome }}
-                </option>
-            {% endfor %}
-        </select>
-    </div>
-</div>
-
-<!-- ANO -->
-<div class="form-group row">
-    <label class="col-sm-2 col-form-label">Ano</label>
+    <label class="col-sm-2 col-form-label" for="campo-ano">Ano</label>
     <div class="col-sm-10">
         <select name="ano" id="campo-ano" class="form-control" required>
             {% for ano in anos %}
@@ -47,7 +35,23 @@ Espera no contexto: alunos, turmas (nomes), anos, aluno_selecionado, turma_selec
     </div>
 </div>
 
-<!-- DISCIPLINAS DA TURMA: somente leitura, carregadas ao escolher a turma e o ano -->
+<!-- TURMA: só as turmas que existem no ano escolhido -->
+<div class="form-group row">
+    <label class="col-sm-2 col-form-label" for="campo-turma">Turma</label>
+    <div class="col-sm-10">
+        <select name="turma" id="campo-turma" class="form-control" required>
+            <option value="" disabled hidden {% if turma_selecionada not in turmas %}selected{% endif %}>Selecione a turma</option>
+            {% for nome in turmas %}
+                <option value="{{ nome }}" {% if nome == turma_selecionada %}selected{% endif %}>
+                    {{ nome }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+{{ turmas_por_ano|json_script:"turmas-por-ano" }}
+
+<!-- DISCIPLINAS DA TURMA: somente leitura, carregadas ao escolher o ano e a turma -->
 <div class="form-group row" id="bloco-disciplinas" style="display: none;">
     <div class="col-sm-10 offset-sm-2">
         <label>Disciplinas da turma (serão vinculadas automaticamente)</label>

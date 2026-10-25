@@ -1205,15 +1205,21 @@ def _outra_turma_no_ano(aluno_id, turma_nome, ano, ignorar_ids=()):
 
 def _contexto_cadastro_matricula(aluno_selecionado='', turma_selecionada='', ano_selecionado=None):
     """Listas do formulário de matrícula e o que já estava escolhido, para voltar à tela após um erro."""
-    turmas_ativas = Turma.objects.filter(ativo=True)
-    anos = sorted(set(turmas_ativas.values_list('ano', flat=True)), reverse=True)
+    # Turmas de cada ano: o ano é escolhido primeiro e a lista de turmas mostra só as daquele ano
+    turmas_por_ano = {}
+    for nome, ano in Turma.objects.filter(ativo=True).values_list('nome', 'ano'):
+        turmas_por_ano.setdefault(str(ano), set()).add(nome)
+    turmas_por_ano = {ano: sorted(nomes) for ano, nomes in turmas_por_ano.items()}
+    anos = sorted((int(ano) for ano in turmas_por_ano), reverse=True)
 
-    if ano_selecionado is None and datetime.now().year in anos:
-        ano_selecionado = datetime.now().year
+    # Padrão: o ano atual, ou o mais recente que tiver turma
+    if ano_selecionado is None and anos:
+        ano_selecionado = datetime.now().year if datetime.now().year in anos else anos[0]
 
     return {
-        "alunos": User.objects.filter(groups__name='aluno'),
-        "turmas": sorted(set(turmas_ativas.values_list('nome', flat=True))),
+        "alunos": User.objects.filter(groups__name='aluno').order_by('first_name'),
+        "turmas": turmas_por_ano.get(str(ano_selecionado), []),
+        "turmas_por_ano": turmas_por_ano,
         "anos": anos,
         "aluno_selecionado": aluno_selecionado,
         "turma_selecionada": turma_selecionada,

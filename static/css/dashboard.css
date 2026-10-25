@@ -294,7 +294,18 @@
     color: var(--da-azul);
 }
 
-.dashboard .da-explicacao p {
+/* Regra em tópicos, como a lista da caixa "Regra de aprovação" */
+.dashboard .da-explicacao ul {
+    margin: 0;
+    padding-left: 18px;
+    list-style: disc;
+}
+
+.dashboard .da-explicacao li {
+    margin-bottom: 4px;
+}
+
+.dashboard .da-explicacao li:last-child {
     margin-bottom: 0;
 }
 
