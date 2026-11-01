@@ -212,7 +212,8 @@ $(document).ready(function () {
         $.get("{% url 'turmas-por-disciplina' %}", { disciplina: disciplina }, function (data) {
             $turma.prop('disabled', false).html('<option value="" disabled hidden selected>Selecione a turma</option>');
             data.turmas.forEach(function (t) {
-                $turma.append('<option value="' + t.id + '">' + t.nome + ' · ' + t.ano + '</option>');
+                // .text() trata o nome da turma como texto, nunca como HTML
+                $turma.append($('<option>').val(t.id).text(t.nome + ' · ' + t.ano));
             });
         });
     });

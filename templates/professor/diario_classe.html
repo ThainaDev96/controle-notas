@@ -1,0 +1,420 @@
+{% extends 'base_sistema.html' %}
+{% load static %}
+
+{% block title %}Diário de Classe{% endblock %}
+{% block nav_diario_classe %}active{% endblock %}
+
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/diario-classe.css' %}">
+<style>
+.card {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.col-sm-12 {
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.form-group label i {
+    color: #1B3D93;
+    margin-right: 4px;
+}
+</style>
+
+{% endblock %}
+
+{% block content %}
+<div class="diario-classe">
+
+<div class="page-header">
+    <div class="row align-items-end">
+        <div class="col-lg-8">
+            <div class="page-header-title">
+                <div class="d-inline">
+                    <h4>Diário de Classe</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-sm-12">
+        <!-- CARD DE FILTROS -->
+        <div class="card">
+            <div class="card-block" style="padding: 15px;">
+                <form method="POST" action="{% url 'diario-classe' %}?data={{ data|date:'Y-m-d' }}" id="form-filtros">
+                    {% csrf_token %}
+                    <div class="row">
+
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-disciplina"><i class="ti-book"></i>Disciplina</label>
+                                <select id="filtro-disciplina" name="disciplina" class="form-control" required>
+                                    <option value="" disabled hidden {% if not disciplina_atual %}selected{% endif %}>{% if disciplinas %}Selecione a disciplina{% else %}Nenhuma disciplina ativa{% endif %}</option>
+                                    {% for disciplina in disciplinas %}
+                                        <option value="{{ disciplina.id }}"
+                                            {% if disciplina.id == disciplina_atual.id %}selected{% endif %}>
+                                            {{ disciplina.nome }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="filtro-turma"><i class="ti-user"></i>Turma</label>
+                                <select id="filtro-turma" name="turma" class="form-control" required {% if not disciplina_atual %}disabled{% endif %}>
+                                    {% if disciplina_atual %}
+                                        <option value="" disabled hidden {% if not turma_atual %}selected{% endif %}>Selecione a turma</option>
+                                        {% for turma in turmas %}
+                                            <option value="{{ turma.id }}"
+                                                {% if turma.id == turma_atual.id %}selected{% endif %}>
+                                                {{ turma.nome }} · {{ turma.ano }}
+                                            </option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="" disabled hidden selected>Selecione a disciplina primeiro</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-group w-100">
+                                <button type="submit" class="btn-filtrar-delicado">
+                                    <i class="ti-filter"></i> <span class="texto-sublinhado">Filtrar</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <a href="{% url 'diario-classe' %}?limpar=1" class="link-limpar-filtros">
+                                <i class="ti-close"></i> Limpar filtros
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- FIM CARD DE FILTROS -->
+        <div class="card">
+
+            <div class="card-header">
+                <h5>Frequência dos Alunos</h5>
+            </div>
+
+            <div class="card-block">
+                {% if not disciplinas %}
+                <!-- O diário só mostra as disciplinas ativas do próprio professor -->
+                <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                    <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Você ainda não tem nenhuma disciplina ativa. Peça ao administrador para vincular uma disciplina a você.</p>
+                </div>
+                {% elif not turma_atual %}
+                <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
+                    <i class="ti-filter" style="font-size: 22px; color: #999;"></i>
+                    <p class="text-muted mt-2 mb-0">Selecione a disciplina e a turma para ver o diário</p>
+                </div>
+                {% else %}
+
+                <!-- BARRA DE DATA E "AULA REALIZADA" -->
+                <div class="dc-barra">
+                    <div class="dc-data">
+                        <a href="{% url 'diario-classe' %}?data={{ data_anterior|date:'Y-m-d' }}" class="dc-botao"
+                            title="Dia anterior" aria-label="Dia anterior, {{ data_anterior|date:'d/m/Y' }}">
+                            <i class="ti-angle-left" aria-hidden="true"></i>
+                        </a>
+                        <button type="button" class="dc-botao" id="dc-abrir-calendario"
+                            title="Escolher data" aria-label="Escolher data no calendário">
+                            <i class="ti-calendar" aria-hidden="true"></i>
+                        </button>
+                        <input type="date" id="dc-calendario" class="dc-calendario" value="{{ data|date:'Y-m-d' }}"
+                            tabindex="-1" aria-hidden="true">
+                        <div class="dc-data__texto">
+                            <span class="dc-data__dia">{{ data|date:"d/m/Y" }}</span>
+                            <span class="dc-data__semana">{{ dia_semana }}</span>
+                        </div>
+                        <a href="{% url 'diario-classe' %}?data={{ data_proxima|date:'Y-m-d' }}" class="dc-botao"
+                            title="Próximo dia" aria-label="Próximo dia, {{ data_proxima|date:'d/m/Y' }}">
+                            <i class="ti-angle-right" aria-hidden="true"></i>
+                        </a>
+                    </div>
+
+                    <label class="dc-interruptor">
+                        <input type="checkbox" id="dc-aula-realizada" role="switch" autocomplete="off" {% if aula.realizada %}checked{% endif %}>
+                        <span class="dc-interruptor__trilho" aria-hidden="true"></span>
+                        <span>Aula realizada</span>
+                    </label>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="TabelaDiario" class="table table-striped table-bordered dc-tabela">
+                        <thead>
+                            <tr>
+                                <th>Matrícula</th>
+                                <th>Aluno</th>
+                                <th>
+                                    Períodos
+                                    <div class="dc-numeros" aria-hidden="true">
+                                        {% for numero in numeros_periodos %}<span>{{ numero }}</span>{% endfor %}
+                                    </div>
+                                </th>
+                                <th>Faltas</th>
+                                <th>Frequência</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for linha in linhas %}
+                                <tr data-matricula="{{ linha.matricula_id }}">
+                                    <td>{{ linha.aluno.username }}</td>
+                                    <td>{{ linha.aluno.first_name }}</td>
+                                    <td>
+                                        <div class="dc-periodos">
+                                            {% for periodo in linha.periodos %}
+                                                <button type="button"
+                                                    class="dc-periodo{% if periodo.falta %} dc-periodo--falta{% endif %}"
+                                                    data-periodo="{{ periodo.numero }}"
+                                                    data-falta="{% if periodo.falta %}1{% else %}0{% endif %}"
+                                                    data-aluno="{{ linha.aluno.first_name }}"
+                                                    {% if not aula.realizada %}disabled{% endif %}
+                                                    aria-label="{{ linha.aluno.first_name }}, período {{ periodo.numero }}: {% if not aula.realizada %}aula não realizada{% elif periodo.falta %}falta{% else %}presente{% endif %}">
+                                                    {% if not aula.realizada %}–{% elif periodo.falta %}F{% else %}P{% endif %}
+                                                </button>
+                                            {% endfor %}
+                                        </div>
+                                    </td>
+                                    <td class="dc-col-faltas">{{ linha.faltas }}</td>
+                                    <td class="dc-col-frequencia">{{ linha.frequencia }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5">Nenhum aluno matriculado nessa turma</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+
+                    </table>
+                </div>
+
+                <!-- LEGENDA -->
+                <div class="dc-legenda">
+                    <span class="dc-legenda__item"><span class="dc-marca" aria-hidden="true">P</span> Presente</span>
+                    <span class="dc-legenda__item"><span class="dc-marca dc-marca--falta" aria-hidden="true">F</span> Falta</span>
+                    <span class="dc-legenda__item"><span class="dc-marca dc-marca--nao-realizada" aria-hidden="true"></span> Aula não realizada</span>
+                    <span class="dc-legenda__base">
+                        {% if total_periodos %}
+                            Frequência calculada sobre {{ total_periodos }} períodos
+                        {% else %}
+                            Frequência calculada sobre o total de períodos da disciplina, que ainda não foi informado
+                        {% endif %}
+                    </span>
+                </div>
+
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if aula %}{{ frequencias|json_script:"dc-frequencias" }}{% endif %}
+<script>
+$(document).ready(function () {
+    $('#filtro-disciplina').on('change', function () {
+        var disciplina = $(this).val();
+        var $turma = $('#filtro-turma');
+
+        if (!disciplina) {
+            $turma.prop('disabled', true).html('<option value="" disabled hidden selected>Selecione a disciplina primeiro</option>');
+            return;
+        }
+
+        $.get("{% url 'turmas-por-disciplina' %}", { disciplina: disciplina }, function (data) {
+            $turma.prop('disabled', false).html('<option value="" disabled hidden selected>Selecione a turma</option>');
+            data.turmas.forEach(function (t) {
+                // .text() trata o nome da turma como texto, nunca como HTML
+                $turma.append($('<option>').val(t.id).text(t.nome + ' · ' + t.ano));
+            });
+        });
+    });
+
+    {% if aula %}
+    var aulaId = '{{ aula.id }}';
+    var erroPadrao = 'Não foi possível salvar. Recarregue a página e tente de novo.';
+    var $chave = $('#dc-aula-realizada');
+    // Estado da aula já confirmado pelo servidor, e se o interruptor está salvando
+    var aulaRealizada = {{ aula.realizada|yesno:'true,false' }};
+    var salvandoAula = false;
+    // Faltas ainda sendo salvas. O interruptor só é salvo depois delas, para as respostas não se cruzarem.
+    var faltasSalvando = 0;
+    var aulaEsperando = false;
+    // Frequência de cada quantidade de faltas, já calculada no servidor pela função única
+    var frequencias = JSON.parse(document.getElementById('dc-frequencias').textContent);
+
+    // Ícone de calendário: abre o seletor de data do navegador; escolher uma data abre aquela aula.
+    var calendario = document.getElementById('dc-calendario');
+    $('#dc-abrir-calendario').on('click', function () {
+        if (calendario.showPicker) {
+            try {
+                calendario.showPicker();
+                return;
+            } catch (e) {}
+        }
+        calendario.focus();
+        calendario.click();
+    });
+    $(calendario).on('change', function () {
+        if (this.value) {
+            window.location.href = "{% url 'diario-classe' %}?data=" + this.value;
+        }
+    });
+
+    // Mostra a célula conforme o estado: cinza e travada com a aula não realizada; senão P ou F.
+    function pintarCelula($celula, realizada) {
+        var falta = $celula.attr('data-falta') === '1';
+        var estado = !realizada ? 'aula não realizada' : (falta ? 'falta' : 'presente');
+        $celula
+            .prop('disabled', !realizada)
+            .toggleClass('dc-periodo--falta', falta)
+            .text(!realizada ? '–' : (falta ? 'F' : 'P'))
+            .attr('aria-label', $celula.attr('data-aluno') + ', período ' + $celula.attr('data-periodo') + ': ' + estado);
+    }
+
+    function mostrarTotais($linha, faltas, frequencia) {
+        $linha.find('.dc-col-faltas').text(faltas);
+        $linha.find('.dc-col-frequencia').text(frequencia);
+    }
+
+    // Soma ou tira faltas da linha na hora do clique, sem esperar o servidor. Se a quantidade
+    // não estiver entre as frequências calculadas, a frequência espera a resposta do servidor.
+    function somarFaltas($linha, quantidade) {
+        var faltas = parseInt($linha.find('.dc-col-faltas').text(), 10) + quantidade;
+        var frequencia = frequencias[faltas];
+        mostrarTotais($linha, faltas, frequencia === undefined ? $linha.find('.dc-col-frequencia').text() : frequencia);
+    }
+
+    function salvarAula() {
+        var realizada = $chave.is(':checked');
+        if (realizada === aulaRealizada) {
+            $chave.prop('disabled', false);
+            return;
+        }
+        salvandoAula = true;
+        $chave.prop('disabled', true);
+
+        $.post("{% url 'aula-realizada-ajax' %}", {
+            aula: aulaId,
+            realizada: realizada ? '1' : '0',
+            csrfmiddlewaretoken: '{{ csrf_token }}'
+        }).done(function (resp) {
+            if (resp && resp.ok) {
+                aulaRealizada = resp.realizada;
+                $('.dc-periodo').each(function () {
+                    pintarCelula($(this), aulaRealizada);
+                });
+                $('#TabelaDiario tbody tr[data-matricula]').each(function () {
+                    var aluno = resp.alunos[$(this).attr('data-matricula')];
+                    if (aluno) {
+                        mostrarTotais($(this), aluno.faltas, aluno.frequencia);
+                    }
+                });
+            } else {
+                $chave.prop('checked', aulaRealizada);
+                alert((resp && resp.erro) || erroPadrao);
+            }
+        }).fail(function () {
+            $chave.prop('checked', aulaRealizada);
+            alert(erroPadrao);
+        }).always(function () {
+            salvandoAula = false;
+            $chave.prop('disabled', false);
+        });
+    }
+
+    $chave.on('change', function () {
+        // Com falta ainda sendo salva, o interruptor fica travado e é salvo quando a última resposta chegar
+        if (faltasSalvando > 0) {
+            aulaEsperando = true;
+            $chave.prop('disabled', true);
+            return;
+        }
+        salvarAula();
+    });
+
+    // Sair da página antes de o interruptor ser enviado perderia a mudança: o navegador pede confirmação
+    window.addEventListener('beforeunload', function (evento) {
+        if (aulaEsperando) {
+            evento.preventDefault();
+            evento.returnValue = '';
+        }
+    });
+
+    // Clicar alterna P e F: a célula, as faltas e a frequência mudam na hora e a falta é salva
+    // em seguida (cria ou apaga a Falta). Se o servidor recusar, tudo volta como estava.
+    $('#TabelaDiario').on('click', '.dc-periodo', function () {
+        var $celula = $(this);
+        // Enquanto o interruptor espera para salvar ou está salvando, as células não mudam
+        if (!aulaRealizada || salvandoAula || aulaEsperando || $celula.prop('disabled') || $celula.attr('aria-busy') === 'true') {
+            return;
+        }
+
+        var $linha = $celula.closest('tr');
+        var faltaAntes = $celula.attr('data-falta');
+        var faltaNova = faltaAntes === '1' ? '0' : '1';
+        var quantidade = faltaNova === '1' ? 1 : -1;
+
+        $celula.attr('data-falta', faltaNova).attr('aria-busy', 'true');
+        pintarCelula($celula, true);
+        somarFaltas($linha, quantidade);
+        faltasSalvando += 1;
+        $linha.attr('data-salvando', (parseInt($linha.attr('data-salvando'), 10) || 0) + 1);
+
+        function desfazer(mensagem) {
+            $celula.attr('data-falta', faltaAntes);
+            pintarCelula($celula, aulaRealizada);
+            somarFaltas($linha, -quantidade);
+            alert(mensagem);
+        }
+
+        $.post("{% url 'marcar-falta-ajax' %}", {
+            aula: aulaId,
+            matricula: $linha.attr('data-matricula'),
+            periodo: $celula.attr('data-periodo'),
+            falta: faltaNova,
+            csrfmiddlewaretoken: '{{ csrf_token }}'
+        }).done(function (resp) {
+            if (resp && resp.ok) {
+                // Com vários cliques na mesma linha, o número do servidor só entra com a última resposta
+                if ($linha.attr('data-salvando') === '1') {
+                    mostrarTotais($linha, resp.faltas, resp.frequencia);
+                }
+            } else {
+                desfazer((resp && resp.erro) || erroPadrao);
+            }
+        }).fail(function () {
+            desfazer(erroPadrao);
+        }).always(function () {
+            $celula.removeAttr('aria-busy');
+            $linha.attr('data-salvando', parseInt($linha.attr('data-salvando'), 10) - 1);
+            faltasSalvando -= 1;
+            if (faltasSalvando === 0 && aulaEsperando) {
+                aulaEsperando = false;
+                salvarAula();
+            }
+        });
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}

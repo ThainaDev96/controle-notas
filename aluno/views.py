@@ -2,8 +2,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao
+from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao, Aula, Falta
 from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame, _fmt_pt
+from aluno.calculo_frequencia import calcular_frequencia
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.password_validation import validate_password, password_validators_help_texts
 from django.core.exceptions import ValidationError
@@ -12,7 +13,9 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.http import require_POST
-from datetime import datetime
+from django.utils import timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
+from functools import wraps
 import json
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -34,7 +37,7 @@ def login_view(request):
                 return redirect("dashboard-admin")
 
             if "professor" in grupos:
-                return redirect("professor-dashboard")
+                return redirect("diario-classe")
 
             return redirect("minhas-notas")
 
@@ -51,7 +54,8 @@ def listar_disciplinas(request):
     return render(request, 'aluno/lista.html', {'disciplinas': disciplinas})
 
 def professor_dashboard(request):
-    return render(request, "professor/dashboard.html")
+    # O painel do professor foi substituído pelo diário de classe; o endereço antigo continua valendo.
+    return redirect("diario-classe")
 
 def _avaliacoes_da_turma(turma):
     # A avaliação é da disciplina; a turma herda as da disciplina dela.
@@ -748,6 +752,210 @@ def lancar_nota_exame_ajax(request):
         'situacao': situacao_display[situacao_final],
     })
 
+def _exige_professor(view):
+    """As telas do diário de classe são só do professor logado (mesma checagem do dashboard_admin)."""
+    @wraps(view)
+    def view_do_professor(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        if not request.user.groups.filter(name='professor').exists():
+            return HttpResponseForbidden("Acesso restrito ao professor.")
+        return view(request, *args, **kwargs)
+    return view_do_professor
+
+def _inteiro(valor):
+    """Número inteiro vindo de formulário ou da sessão, ou None se não for um."""
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+DIAS_DA_SEMANA = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
+
+# O servidor roda em UTC. O "hoje" do diário é a data de Brasília (UTC-3, sem horário de verão
+# desde 2019); sem isso, depois das 21h a tela abriria já no dia seguinte.
+FUSO_BRASILIA = dt_timezone(timedelta(hours=-3))
+
+def _datas_do_diario(request):
+    """
+    Data escolhida em ?data=AAAA-MM-DD e as datas das setas: o dia anterior e o seguinte
+    (o professor pode dar aula em vários dias da semana). Sem data, ou com data inválida, abre em hoje.
+    """
+    try:
+        data = datetime.strptime(request.GET.get('data', ''), '%Y-%m-%d').date()
+        return data, data - timedelta(days=1), data + timedelta(days=1)
+    except (ValueError, OverflowError):
+        hoje = timezone.now().astimezone(FUSO_BRASILIA).date()
+        return hoje, hoje - timedelta(days=1), hoje + timedelta(days=1)
+
+def _faltas_por_matricula(matriculas):
+    """Faltas de cada matrícula: registros Falta em aulas realizadas (cada um vale 1 período)."""
+    return dict(
+        Falta.objects.filter(matricula__in=matriculas, aula__realizada=True)
+        .values('matricula_id').annotate(total=Count('id')).values_list('matricula_id', 'total')
+    )
+
+def _aula_do_professor(aula_id, professor):
+    """A aula enviada pelo diário, se a turma e a disciplina estiverem ativas e a disciplina for do professor."""
+    aula_id = _inteiro(aula_id)
+    if aula_id is None:
+        return None
+    return Aula.objects.select_related('turma__disciplina').filter(
+        id=aula_id, turma__ativo=True, turma__disciplina__ativo=True, turma__disciplina__professor=professor
+    ).first()
+
+@_exige_professor
+def diario_classe(request):
+    if request.GET.get('limpar'):
+        request.session.pop('filtro_diario_disciplina', None)
+        request.session.pop('filtro_diario_turma', None)
+        return redirect('diario-classe')
+
+    data, data_anterior, data_proxima = _datas_do_diario(request)
+
+    if request.method == 'POST':
+        request.session['filtro_diario_disciplina'] = request.POST.get('disciplina', '')
+        request.session['filtro_diario_turma'] = request.POST.get('turma', '')
+        # Volta por GET, na mesma data: atualizar a página depois não reenvia o formulário.
+        return redirect(f"{reverse('diario-classe')}?data={data.isoformat()}")
+
+    disciplina_id = request.session.get('filtro_diario_disciplina', '')
+    turma_id      = request.session.get('filtro_diario_turma', '')
+
+    # O professor só vê as próprias disciplinas e as turmas delas.
+    disciplinas = Disciplina.objects.filter(ativo=True, professor=request.user)
+    disciplina_atual = disciplinas.filter(id=disciplina_id).first() if _inteiro(disciplina_id) is not None else None
+    turmas = Turma.objects.filter(
+        disciplina=disciplina_atual, ativo=True
+    ).select_related('disciplina').order_by('-ano', 'nome') if disciplina_atual else Turma.objects.none()
+    turma_atual = turmas.filter(id=turma_id).first() if _inteiro(turma_id) is not None else None
+
+    aula = None
+    linhas = []
+    total_periodos = None
+
+    if turma_atual:
+        # A aula é criada na primeira vez que a data é aberta, sem cadastro prévio.
+        aula, _ = Aula.objects.get_or_create(turma=turma_atual, data=data)
+        total_periodos = turma_atual.disciplina.total_periodos
+
+        # Mesma lista de alunos da lista de notas
+        alunos = User.objects.filter(
+            matricula__turma_id=turma_atual.id, matricula__turma__ativo=True, matricula__ativo=True
+        ).exclude(groups__name='professor').distinct().order_by('first_name')
+
+        matriculas = {
+            m.aluno_id: m
+            for m in Matricula.objects.filter(turma=turma_atual, ativo=True)
+        }
+        faltas_na_aula = set(Falta.objects.filter(aula=aula).values_list('matricula_id', 'periodo'))
+        faltas_por_matricula = _faltas_por_matricula(list(matriculas.values()))
+
+        for aluno in alunos:
+            matricula = matriculas[aluno.id]
+            faltas = faltas_por_matricula.get(matricula.id, 0)
+            linhas.append({
+                'aluno': aluno,
+                'matricula_id': matricula.id,
+                # Sem registro de Falta, o aluno está presente no período.
+                'periodos': [
+                    {'numero': periodo, 'falta': (matricula.id, periodo) in faltas_na_aula}
+                    for periodo in range(1, aula.periodos + 1)
+                ],
+                'faltas': faltas,
+                'frequencia': calcular_frequencia(total_periodos, faltas),
+            })
+
+    # Frequência de cada quantidade de faltas que um aluno pode chegar a ter nesta tela (as de hoje
+    # e as das outras aulas), já calculada pela função única. A tela usa para mostrar a frequência
+    # na hora do clique, sem esperar a resposta do servidor nem repetir a fórmula no JavaScript.
+    frequencias = {}
+    if aula:
+        limite = max((linha['faltas'] for linha in linhas), default=0) + aula.periodos
+        frequencias = {faltas: calcular_frequencia(total_periodos, faltas) for faltas in range(limite + 1)}
+
+    return render(request, "professor/diario_classe.html", {
+        "disciplinas":            disciplinas,
+        "turmas":                 turmas,
+        "disciplina_atual":       disciplina_atual,
+        "turma_atual":            turma_atual,
+        "aula":                   aula,
+        "numeros_periodos":       range(1, aula.periodos + 1) if aula else [],
+        "linhas":                 linhas,
+        "frequencias":            frequencias,
+        "total_periodos":         total_periodos,
+        "data":                   data,
+        "data_anterior":          data_anterior,
+        "data_proxima":           data_proxima,
+        "dia_semana":             DIAS_DA_SEMANA[data.weekday()],
+    })
+
+@require_POST
+@_exige_professor
+def aula_realizada_ajax(request):
+    aula = _aula_do_professor(request.POST.get('aula'), request.user)
+    if not aula:
+        return JsonResponse({'ok': False, 'erro': 'Aula não encontrada.'})
+
+    # Desligar não apaga as faltas: elas ficam guardadas, só deixam de contar.
+    aula.realizada = request.POST.get('realizada') == '1'
+    aula.save(update_fields=['realizada'])
+
+    # Ligar ou desligar muda o que conta, então devolve as faltas e a frequência de cada aluno da turma.
+    matriculas = list(Matricula.objects.filter(turma_id=aula.turma_id, ativo=True))
+    faltas_por_matricula = _faltas_por_matricula(matriculas)
+    total_periodos = aula.turma.disciplina.total_periodos
+    alunos = {}
+    for matricula in matriculas:
+        faltas = faltas_por_matricula.get(matricula.id, 0)
+        alunos[matricula.id] = {
+            'faltas': faltas,
+            'frequencia': calcular_frequencia(total_periodos, faltas),
+        }
+
+    return JsonResponse({
+        'ok': True,
+        'realizada': aula.realizada,
+        'alunos': alunos,
+    })
+
+@require_POST
+@_exige_professor
+def marcar_falta_ajax(request):
+    aula = _aula_do_professor(request.POST.get('aula'), request.user)
+    if not aula:
+        return JsonResponse({'ok': False, 'erro': 'Aula não encontrada.'})
+
+    # Com "Aula realizada" desligada as células ficam travadas.
+    if not aula.realizada:
+        return JsonResponse({'ok': False, 'erro': 'Ligue "Aula realizada" antes de marcar presença ou falta.'})
+
+    matricula_id = _inteiro(request.POST.get('matricula'))
+    matricula = Matricula.objects.filter(
+        id=matricula_id, turma_id=aula.turma_id, ativo=True
+    ).first() if matricula_id is not None else None
+    if not matricula:
+        return JsonResponse({'ok': False, 'erro': 'Aluno não encontrado nessa turma.'})
+
+    periodo = _inteiro(request.POST.get('periodo'))
+    if periodo is None or not 1 <= periodo <= aula.periodos:
+        return JsonResponse({'ok': False, 'erro': 'Período inválido.'})
+
+    # A célula manda o estado desejado (falta=1 ou 0), então repetir o envio não inverte de novo.
+    falta = request.POST.get('falta') == '1'
+    if falta:
+        Falta.objects.get_or_create(aula=aula, matricula=matricula, periodo=periodo)
+    else:
+        Falta.objects.filter(aula=aula, matricula=matricula, periodo=periodo).delete()
+
+    faltas = _faltas_por_matricula([matricula]).get(matricula.id, 0)
+    return JsonResponse({
+        'ok': True,
+        'falta': falta,
+        'faltas': faltas,
+        'frequencia': calcular_frequencia(aula.turma.disciplina.total_periodos, faltas),
+    })
+
 def gerar_relatorio(request):
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="boletim.pdf"'
@@ -1011,19 +1219,39 @@ def gestao_disciplinas(request):
         "disciplina_selecionada":  disciplina_id,
     })
 
+# Maior valor que a coluna integer do PostgreSQL guarda; acima disso o banco recusa e a tela daria erro 500
+MAXIMO_TOTAL_PERIODOS = 2147483647
+
+def _ler_total_periodos(request):
+    """
+    Campo opcional "Total de períodos" do formulário de disciplina.
+    Devolve (valor, erro): vazio vira None; preenchido tem que ser um inteiro maior que zero.
+    """
+    texto = (request.POST.get('total_periodos') or '').strip()
+    if not texto:
+        return None, None
+    valor = _inteiro(texto)
+    if valor is None or valor < 1:
+        return None, "O total de períodos deve ser um número inteiro maior que zero."
+    if valor > MAXIMO_TOTAL_PERIODOS:
+        return None, "O total de períodos informado é grande demais."
+    return valor, None
+
 def cadastrar_disciplina(request):
     if request.method == 'POST':
         nome = request.POST.get('nome')
         professor_id = request.POST.get('professor')
+        total_periodos, erro_total = _ler_total_periodos(request)
 
-        if not nome or not professor_id:
-            messages.error(request, "Preencha o nome e selecione o professor antes de salvar.")
+        if not nome or not professor_id or erro_total:
+            messages.error(request, erro_total or "Preencha o nome e selecione o professor antes de salvar.")
             return render(request, "gestao/cadastrar_disciplina.html", {
                 "professores": User.objects.filter(groups__name='professor'),
                 "nome": nome,
+                "total_periodos": request.POST.get('total_periodos', ''),
             })
 
-        Disciplina.objects.create(nome=nome, professor_id=professor_id)
+        Disciplina.objects.create(nome=nome, professor_id=professor_id, total_periodos=total_periodos)
         messages.success(request, "Disciplina cadastrada com sucesso!")
         return redirect("gestao-disciplinas")
 
@@ -1052,6 +1280,19 @@ def editar_disciplina(request, id):
     if request.method == "POST":
         disciplina.nome = request.POST.get("nome")
         disciplina.professor_id = request.POST.get("professor")
+        total_periodos, erro_total = _ler_total_periodos(request)
+
+        if erro_total:
+            messages.error(request, erro_total)
+            # Não grava: volta para o formulário com o que foi digitado, para a pessoa corrigir
+            disciplina.professor_id = _inteiro(disciplina.professor_id)
+            disciplina.total_periodos = request.POST.get('total_periodos')
+            return render(request, "gestao/editar_disciplina.html", {
+                "disciplina": disciplina,
+                "professores": User.objects.filter(groups__name='professor'),
+            })
+
+        disciplina.total_periodos = total_periodos
         disciplina.save()
         messages.success(request, "Disciplina editada com sucesso!")
         return redirect("gestao-disciplinas")

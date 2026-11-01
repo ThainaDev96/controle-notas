@@ -198,7 +198,7 @@
                             <i class="feather icon-menu"></i>
                         </a>
                         <a href="#">
-                            <img class="img-fluid" src="{% static 'assets/images/logo_menu.png' %}" alt="Logo" width="180">
+                            <img class="img-fluid" src="{% static 'assets/images/logo_menu.svg' %}" alt="Logo" width="180">
                         </a>
                         <a class="mobile-options">
                             <i class="feather icon-more-horizontal"></i>
@@ -253,10 +253,10 @@
                             </div>
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
-                                <li class="{% block nav_painel %}{% endblock %}">
-                                    <a href="{% url 'professor-dashboard' %}">
-                                        <span class="pcoded-micon"><i class="feather icon-home"></i></span>
-                                        <span class="pcoded-mtext">Painel</span>
+                                <li class="{% block nav_diario_classe %}{% endblock %}">
+                                    <a href="{% url 'diario-classe' %}">
+                                        <span class="pcoded-micon"><i class="feather icon-calendar"></i></span>
+                                        <span class="pcoded-mtext">Diário de classe</span>
                                     </a>
                                 </li>
                                 <li class="pcoded-hasmenu {% block nav_notas_menu %}{% endblock %}">

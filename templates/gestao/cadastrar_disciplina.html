@@ -66,6 +66,15 @@
                         </div>
                     </div>
 
+                    <!-- TOTAL DE PERÍODOS -->
+                    <div class="form-group row">
+                        <label class="col-sm-2 col-form-label">Total de períodos</label>
+                        <div class="col-sm-10">
+                            <input type="number" class="form-control" name="total_periodos" min="1" max="2147483647" step="1"
+                                value="{{ total_periodos|default:'' }}" placeholder="Opcional, ex.: 72">
+                        </div>
+                    </div>
+
                     <!-- BOTÕES -->
                     <div>
                         <a href="{% url 'gestao-disciplinas' %}" class="btn-filtrar-delicado btn-delicado-vermelho" style="float: right; margin-right: 16px;"><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></a>
