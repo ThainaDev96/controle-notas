@@ -1,0 +1,6 @@
+{# O exame só é lançado no Cadastro de Notas: na Lista ele é só para ver. #}
+{% if item.exame_aberto and modo == "lancar" %}
+    <td class="col-exame editavel" data-nota="{{ item.nota_id }}" data-rotulo="{{ item.aluno.first_name }}, Exame"></td>
+{% else %}
+    <td class="col-exame">{{ item.nota_exame|default_if_none:"-" }}</td>
+{% endif %}

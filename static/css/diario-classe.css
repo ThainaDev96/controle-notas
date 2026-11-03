@@ -9,6 +9,7 @@
  * Significado fixo das cores (as mesmas do dashboard.css e do menu lateral):
  *   azul claro com texto azul    = presente (P)
  *   vermelho com texto branco    = falta (F)
+ *   contorno vermelho            = falta justificada (J)
  *   cinza                        = aula não realizada
  */
 
@@ -192,6 +193,13 @@
     background: var(--da-vermelho);
 }
 
+/* Falta justificada: o mesmo vermelho da falta, só no contorno */
+.diario-classe .dc-periodo--justificada {
+    color: var(--da-vermelho);
+    background: #FFFFFF;
+    border: 1px solid var(--da-vermelho);
+}
+
 /* A borda é o mesmo cinza da caixa tracejada das telas: sem ela, a célula some nas linhas listradas da tabela */
 .diario-classe .dc-periodo:disabled {
     color: var(--dc-cinza-texto);
@@ -241,6 +249,12 @@
 .diario-classe .dc-marca--falta {
     color: #FFFFFF;
     background: var(--da-vermelho);
+}
+
+.diario-classe .dc-marca--justificada {
+    color: var(--da-vermelho);
+    background: #FFFFFF;
+    border: 1px solid var(--da-vermelho);
 }
 
 .diario-classe .dc-marca--nao-realizada {

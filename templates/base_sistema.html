@@ -130,9 +130,16 @@
     .btn-filtrar-delicado.btn-delicado-novo:hover i {
         color: #022B59;
     }
-    /* Respiro entre "Cancelar" e "Sim, excluir" na janela de confirmação */
-    #modalDeletar .modal-footer {
+    /* Respiro entre "Cancelar" e "Sim, excluir" (ou "Sim, salvar") na janela de confirmação */
+    #modalDeletar .modal-footer,
+    #modalSalvar .modal-footer {
         gap: 20px;
+    }
+    /* Célula aberta da tabela de notas (Cadastro e Lista): contorno de foco no azul da marca, como no diário.
+       O tema tira o contorno, e sem ele não dá para ver em qual célula o Tab parou. */
+    #TabelaNotas tbody td[contenteditable="true"]:focus {
+        outline: 2px solid #03458F;
+        outline-offset: -2px;
     }
     .link-limpar-filtros {
         font-size: 13px;
@@ -254,7 +261,7 @@
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_diario_classe %}{% endblock %}">
-                                    <a href="{% url 'diario-classe' %}">
+                                    <a href="{% url 'diario-classe' %}?limpar=1">
                                         <span class="pcoded-micon"><i class="feather icon-calendar"></i></span>
                                         <span class="pcoded-mtext">Diário de classe</span>
                                     </a>
@@ -266,12 +273,12 @@
                                     </a>
                                     <ul class="pcoded-submenu">
                                         <li class="{% block nav_lista_notas %}{% endblock %}">
-                                            <a href="{% url 'lista-notas' %}">
+                                            <a href="{% url 'lista-notas' %}?limpar=1">
                                                 <span class="pcoded-mtext">Listar</span>
                                             </a>
                                         </li>
                                         <li class="{% block nav_cadastrar_notas %}{% endblock %}">
-                                            <a href="{% url 'cadastrar-notas' %}">
+                                            <a href="{% url 'cadastrar-notas' %}?limpar=1">
                                                 <span class="pcoded-mtext">Cadastrar</span>
                                             </a>
                                         </li>
@@ -293,7 +300,7 @@
                             <div class="pcoded-navigatio-lavel">Minhas Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
                                 <li class="{% block nav_minhas_notas %}{% endblock %}">
-                                    <a href="{% url 'minhas-notas' %}">
+                                    <a href="{% url 'minhas-notas' %}?limpar=1">
                                         <span class="pcoded-micon"><i class="ti-book"></i></span>
                                         <span class="pcoded-mtext">Boletim</span>
                                     </a>
@@ -320,13 +327,13 @@
                                     </a>
                                     <ul class="pcoded-submenu">
                                         <li class="{% block nav_gestao_disciplinas %}{% endblock %}">
-                                            <a href="{% url 'gestao-disciplinas' %}"><span class="pcoded-mtext">Disciplinas</span></a>
+                                            <a href="{% url 'gestao-disciplinas' %}?limpar=1"><span class="pcoded-mtext">Disciplinas</span></a>
                                         </li>
                                         <li class="{% block nav_gestao_turmas %}{% endblock %}">
-                                            <a href="{% url 'gestao-turmas' %}"><span class="pcoded-mtext">Turmas</span></a>
+                                            <a href="{% url 'gestao-turmas' %}?limpar=1"><span class="pcoded-mtext">Turmas</span></a>
                                         </li>
                                         <li class="{% block nav_gestao_matriculas %}{% endblock %}">
-                                            <a href="{% url 'gestao-matriculas' %}"><span class="pcoded-mtext">Matrículas</span></a>
+                                            <a href="{% url 'gestao-matriculas' %}?limpar=1"><span class="pcoded-mtext">Matrículas</span></a>
                                         </li>
                                     </ul>
                                 </li>
@@ -337,7 +344,7 @@
                                     </a>
                                     <ul class="pcoded-submenu">
                                         <li class="{% block nav_gestao_usuarios %}{% endblock %}">
-                                            <a href="{% url 'gestao-usuarios' %}"><span class="pcoded-mtext">Usuários</span></a>
+                                            <a href="{% url 'gestao-usuarios' %}?limpar=1"><span class="pcoded-mtext">Usuários</span></a>
                                         </li>
                                     </ul>
                                 </li>

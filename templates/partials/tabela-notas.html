@@ -1,0 +1,59 @@
+{# Tabela de notas, a mesma na Lista de Notas (modo="editar") e no Cadastro de Notas (modo="lancar"). #}
+{# Na Lista só a nota lançada abre para corrigir, e o exame é só para ver; no Cadastro, só o que está em branco abre para lançar. #}
+{# O lançamento e a correção na própria célula ficam em static/js/tabela-notas.js. #}
+<div class="table-responsive dt-responsive">
+    <table id="TabelaNotas" class="table table-striped table-bordered"
+        data-modo="{{ modo }}"
+        data-turma="{{ turma_id }}"
+        data-url-nota="{% url 'editar-nota-avaliacao-ajax' %}"
+        data-url-exame="{% url 'lancar-nota-exame-ajax' %}"
+        data-csrf="{{ csrf_token }}">
+        <thead>
+            <tr>
+                <th>Matrícula</th>
+                <th>Nome</th>
+                {% for avaliacao in avaliacoes %}
+                    <th>{{ avaliacao.nome }}</th>
+                {% endfor %}
+                {% if modo == "lancar" %}
+                    <th>Exame</th>
+                {% endif %}
+                <th>MF</th>
+                <th>Situação</th>
+                {% if modo == "editar" %}
+                    <th>Exame</th>
+                    <th>Ações</th>
+                {% endif %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for item in alunos_notas %}
+                <tr data-aluno="{{ item.aluno.id }}">
+                    <td>{{ item.aluno.username }}</td>
+                    <td>{{ item.aluno.first_name }}</td>
+                    {% for n in item.notas %}
+                        {% if modo == "editar" and n.valor is not None or modo == "lancar" and n.valor is None %}
+                            <td class="editavel" data-avaliacao="{{ n.avaliacao.id }}" data-rotulo="{{ item.aluno.first_name }}, {{ n.avaliacao.nome }}">{{ n.valor|default_if_none:"" }}</td>
+                        {% else %}
+                            <td>{{ n.valor|default_if_none:"" }}</td>
+                        {% endif %}
+                    {% endfor %}
+                    {% if modo == "lancar" %}
+                        {% include "partials/tabela-notas-exame.html" %}
+                    {% endif %}
+                    <td class="col-mf">{{ item.media_final|default:"-" }}</td>
+                    <td class="col-situacao">{{ item.situacao_display }}</td>
+                    {% if modo == "editar" %}
+                        {% include "partials/tabela-notas-exame.html" %}
+                        <td>
+                            {% url 'editar-nota' item.nota_id as url_editar %}
+                            {% url 'deletar-nota' item.nota_id as url_deletar %}
+                            {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=item.aluno.first_name %}
+                        </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

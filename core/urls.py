@@ -27,8 +27,7 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     path("professor/painel/", views.professor_dashboard, name="professor-dashboard"),
     path("professor/diario-classe/", views.diario_classe, name="diario-classe"),
-    path("diario-classe/aula-realizada-ajax/", views.aula_realizada_ajax, name="aula-realizada-ajax"),
-    path("diario-classe/marcar-falta-ajax/", views.marcar_falta_ajax, name="marcar-falta-ajax"),
+    path("diario-classe/salvar-ajax/", views.salvar_diario_ajax, name="salvar-diario-ajax"),
     path("lista-notas/", views.lista_notas, name="lista-notas"),
     path("nota/editar/<int:id>/", views.editar_nota, name="editar-nota"),
     path("nota/deletar/<int:id>/", views.deletar_nota, name="deletar-nota"),
@@ -63,4 +62,5 @@ urlpatterns = [
     path("avaliacao/deletar/<int:id>/", views.deletar_avaliacao, name="deletar-avaliacao"),
     path("avaliacao/cadastrar-ajax/", views.cadastrar_avaliacao_ajax, name="cadastrar-avaliacao-ajax"),
     path("avaliacao/editar-ajax/", views.editar_avaliacao_ajax, name="editar-avaliacao-ajax"),
+    path("avaliacao/salvar-ajax/", views.salvar_avaliacoes_ajax, name="salvar-avaliacoes-ajax"),
 ]

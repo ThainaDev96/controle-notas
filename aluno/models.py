@@ -124,9 +124,11 @@ class Aula(models.Model):
 
 class Falta(models.Model):
     # Só as faltas ficam gravadas: sem registro, o aluno está presente naquele período.
+    # A falta justificada é uma Falta com justificada=True e conta na frequência como as outras.
     aula = models.ForeignKey(Aula, on_delete=models.CASCADE, verbose_name="Aula")
     matricula = models.ForeignKey(Matricula, on_delete=models.CASCADE, verbose_name="Matrícula")
     periodo = models.PositiveSmallIntegerField(verbose_name="Período")
+    justificada = models.BooleanField(default=False, verbose_name="Falta justificada")
 
     class Meta:
         constraints = [

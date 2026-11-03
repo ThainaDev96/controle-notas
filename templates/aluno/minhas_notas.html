@@ -348,7 +348,7 @@
                             {% for nota in notas %}
                                 <tr>
                                     <td>{{ nota.disciplina }}</td>
-                                    <td class="nota-{{ nota.situacao }}">{{ nota.media_final|default:"-" }}</td>
+                                    <td class="nota-{{ nota.situacao }}">{{ nota.media_final|default_if_none:"-" }}</td>
                                     <td>
                                         {% if nota.situacao == 'aprovado' %}
                                             <span class="badge-situacao badge-aprovado">Aprovado</span>
@@ -362,8 +362,17 @@
                                     </td>
                                 </tr>
                             {% empty %}
+                                {% if not turmas_sem_nota %}
                                 <tr>
                                     <td colspan="3">Nenhuma nota encontrada</td>
+                                </tr>
+                                {% endif %}
+                            {% endfor %}
+                            {% for turma in turmas_sem_nota %}
+                                <tr>
+                                    <td>{{ turma.disciplina }}</td>
+                                    <td class="nota-cursando">-</td>
+                                    <td><span class="badge-situacao badge-cursando">Cursando</span></td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -372,7 +381,7 @@
                 </div>
             </div>
             <!-- Situação Final -->
-            {% if notas %}
+            {% if notas or turmas_sem_nota %}
             <div class="sf-row">
                 <span class="sf-label">Situação Final:</span>
                 {% if situacao_final == 'aprovado' %}
@@ -396,7 +405,7 @@
             {% endif %}
             <!-- Botão download -->
             <div style="text-align: right; padding: 0 20px 15px 0;">
-                <a href="{% url 'gerar-relatorio' %}" class="btn-download">
+                <a href="{% url 'gerar-relatorio' %}?ano={{ ano_selecionado }}" class="btn-download">
                     <i class="ti-download"></i> <span class="texto-sublinhado">Download</span>
                 </a>
             </div>

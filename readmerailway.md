@@ -199,6 +199,8 @@ No terminal do Railway:
 python manage.py popular_dados
 ```
 
+Fora do banco local, esse comando só popula banco vazio (só com o superusuário): se já houver dados, ele para sem alterar nada.
+
 ---
 
 ## 10. Conectar ao banco pelo DBeaver

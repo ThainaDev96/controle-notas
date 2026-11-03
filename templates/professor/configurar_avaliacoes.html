@@ -291,6 +291,12 @@
                     <div class="wrapper-indicador">
                         <span id="indicador-preenchimento"></span>
                     </div>
+
+                    <!-- BOTÕES -->
+                    <div>
+                        <button type="button" id="btn-salvar-avaliacoes" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"
+                            data-nome="as avaliações de {{ disciplina_atual.nome }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -321,6 +327,7 @@
 
 <!-- Modal de Confirmação -->
 {% include "partials/modal-confirmar-exclusao.html" %}
+{% if disciplina_atual %}{% include "partials/modal-confirmar-salvar.html" %}{% endif %}
 
 {% endblock %}
 
@@ -332,9 +339,11 @@
 <script src="{% static 'js/acoes-tabela.js' %}"></script>
 
 <script>
-var URL_DELETAR_AVALIACAO_TPL = "{% url 'deletar-avaliacao' 0 %}";
 var ROTULO_VALOR = "{{ disciplina_atual.rotulo_valor|escapejs }}";
 var MODO_CALCULO = "{{ disciplina_atual.modo_calculo|escapejs }}";
+var erroPadrao = 'Não foi possível salvar. Recarregue a página e tente de novo.';
+// Mudança feita na tabela e ainda não salva: só vai para o banco no Salvar
+var alterado = false;
 
 function formatarPt(numero) {
     return numero.toFixed(1).replace('.', ',');
@@ -409,8 +418,14 @@ $(document).ready(function () {
 
     atualizarIndicador();
 
+    // A linha de digitação pode estar fora da tela (outra página da tabela ou escondida pela busca):
+    // procura em todas as linhas do DataTables.
+    function linhaDeDigitacao() {
+        return $(table.rows().nodes()).filter('#linha-nova-avaliacao');
+    }
+
     $('#btn-nova-avaliacao').on('click', function () {
-        if ($('#linha-nova-avaliacao').length) return;
+        if (linhaDeDigitacao().length) return;
 
         if ($('#wrapper-vazio-avaliacoes').is(':visible')) {
             $('#wrapper-vazio-avaliacoes').hide();
@@ -433,7 +448,7 @@ $(document).ready(function () {
             '<td><input type="number" step="0.01" class="form-control form-control-sm" id="novo-av-valor" placeholder="' + ROTULO_VALOR + '"></td>' +
             '<td>' +
                 '<div class="acoes-disciplina">' +
-                    '<a href="#" class="icone-acao" id="btn-salvar-nova-avaliacao" title="Salvar"><i class="ti-check"></i></a>' +
+                    '<a href="#" class="icone-acao" id="btn-salvar-nova-avaliacao" title="Confirmar"><i class="ti-check"></i></a>' +
                     '<a href="#" class="icone-acao" id="btn-cancelar-nova-avaliacao" title="Cancelar"><i class="ti-close"></i></a>' +
                 '</div>' +
             '</td>';
@@ -451,74 +466,134 @@ $(document).ready(function () {
         }
     });
 
-    $(document).on('click', '#btn-salvar-nova-avaliacao', function (e) {
-        e.preventDefault();
-
-        var nome = $('#novo-av-nome').val().trim();
-        var tipo = $('#novo-av-tipo').data('valor');
-        var valor = $('#novo-av-valor').val();
+    // O check confirma a linha nova na tabela, com a mesma cara das outras; ela vai para o banco no Salvar.
+    function confirmarNovaAvaliacao() {
+        var $digitacao = linhaDeDigitacao();
+        var nome = $digitacao.find('#novo-av-nome').val().trim();
+        var $tipo = $digitacao.find('#novo-av-tipo');
+        var tipo = $tipo.attr('data-valor');
+        var valor = $digitacao.find('#novo-av-valor').val();
 
         if (!nome) {
             alert('Informe o nome da avaliação.');
-            return;
+            return false;
         }
 
-        $.post("{% url 'cadastrar-avaliacao-ajax' %}", {
-            nome: nome,
-            tipo: tipo,
-            valor: valor,
+        table.row($digitacao).remove();
+
+        var linhaHtml =
+            '<td contenteditable="true" class="editavel-avaliacao" data-campo="nome"></td>' +
+            '<td>' +
+                '<div class="dropdown">' +
+                    '<button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-valor="' + tipo + '" aria-haspopup="true" aria-expanded="false">' + $tipo.text().trim() + '</button>' +
+                    '<div class="dropdown-menu tipo-dropdown-menu">' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item' + (tipo === 'prova' ? ' active' : '') + '" data-valor="prova">Prova</a>' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item' + (tipo === 'trabalho' ? ' active' : '') + '" data-valor="trabalho">Trabalho</a>' +
+                        '<a href="#" class="dropdown-item tipo-dropdown-item' + (tipo === 'atividade_aula' ? ' active' : '') + '" data-valor="atividade_aula">Atividade em aula</a>' +
+                    '</div>' +
+                '</div>' +
+            '</td>' +
+            '<td contenteditable="true" class="editavel-avaliacao" data-campo="valor"></td>' +
+            '<td>' +
+                '<div class="acoes-disciplina">' +
+                    '<a href="#" class="icone-acao btn-remover-nova-avaliacao" title="Excluir"><i class="ti-trash"></i></a>' +
+                '</div>' +
+            '</td>';
+
+        var $linha = $('<tr data-nova="1"></tr>').html(linhaHtml);
+        // .text() trata o que foi digitado como texto, nunca como HTML
+        $linha.find('[data-campo="nome"]').text(nome);
+        $linha.find('[data-campo="valor"]').text(valor);
+        table.row.add($linha).draw(false);
+        alterado = true;
+        atualizarIndicador();
+        return true;
+    }
+
+    $(document).on('click', '#btn-salvar-nova-avaliacao', function (e) {
+        e.preventDefault();
+        confirmarNovaAvaliacao();
+    });
+
+    // A linha nova ainda não está no banco: a lixeira só tira a linha da tabela.
+    $(document).on('click', '.btn-remover-nova-avaliacao', function (e) {
+        e.preventDefault();
+        table.row($(this).closest('tr')).remove().draw(false);
+        atualizarIndicador();
+        if (table.rows().count() === 0) {
+            $('#wrapper-tabela-avaliacoes').hide();
+            $('#wrapper-vazio-avaliacoes').show();
+        }
+    });
+
+    // Salvar abre a confirmação. Uma linha nova ainda sem o check é confirmada antes.
+    $('#btn-salvar-avaliacoes').on('click', function () {
+        if (linhaDeDigitacao().length && !confirmarNovaAvaliacao()) {
+            return;
+        }
+        $('#nome-item-salvar').text($(this).data('nome'));
+        $('#modalSalvar').modal('show');
+    });
+
+    // "Sim, salvar": manda todas as linhas, de todas as páginas da tabela, de uma vez. As novas vão na
+    // ordem em que entraram na tabela (não na ordenação da tela), para ficarem nessa ordem nas notas.
+    $('#btn-confirmar-salvar').on('click', function () {
+        var $botao = $(this);
+        var dados = {
             disciplina: "{{ disciplina_selecionada }}",
+            nova_nome: [],
+            nova_tipo: [],
+            nova_valor: [],
             csrfmiddlewaretoken: '{{ csrf_token }}'
-        }, function (resp) {
-            if (!resp.ok) {
-                alert(resp.erro);
+        };
+        $(table.rows({ order: 'index' }).nodes()).each(function () {
+            var $linha = $(this);
+            var nome = $linha.find('[data-campo="nome"]').text().trim();
+            var valor = $linha.find('[data-campo="valor"]').text().trim();
+            var tipo = $linha.find('.tipo-dropdown-toggle').attr('data-valor');
+            if ($linha.attr('data-nova') === '1') {
+                dados.nova_nome.push(nome);
+                dados.nova_tipo.push(tipo);
+                dados.nova_valor.push(valor);
                 return;
             }
+            var id = $linha.find('[data-campo="nome"]').attr('data-id');
+            if (id) {
+                dados['nome_' + id] = nome;
+                dados['tipo_' + id] = tipo;
+                dados['valor_' + id] = valor;
+            }
+        });
 
-            table.row($('#linha-nova-avaliacao')).remove();
-
-            var acoesHtml =
-                '<div class="acoes-disciplina">' +
-                    '<a href="#" class="icone-acao btn-deletar" data-url="' + URL_DELETAR_AVALIACAO_TPL.replace('0', resp.id) + '" data-nome="' + resp.nome + '" title="Excluir"><i class="ti-trash"></i></a>' +
-                '</div>';
-
-            var linhaHtml =
-                '<td contenteditable="true" class="editavel-avaliacao" data-id="' + resp.id + '" data-campo="nome">' + resp.nome + '</td>' +
-                '<td>' +
-                    '<div class="dropdown">' +
-                        '<button type="button" class="tipo-dropdown-toggle dropdown-toggle" data-toggle="dropdown" data-boundary="window" data-id="' + resp.id + '" data-valor="' + resp.tipo + '" aria-haspopup="true" aria-expanded="false">' + resp.tipo_display + '</button>' +
-                        '<div class="dropdown-menu tipo-dropdown-menu">' +
-                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'prova' ? ' active' : '') + '" data-valor="prova">Prova</a>' +
-                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'trabalho' ? ' active' : '') + '" data-valor="trabalho">Trabalho</a>' +
-                            '<a href="#" class="dropdown-item tipo-dropdown-item' + (resp.tipo === 'atividade_aula' ? ' active' : '') + '" data-valor="atividade_aula">Atividade em aula</a>' +
-                        '</div>' +
-                    '</div>' +
-                '</td>' +
-                '<td contenteditable="true" class="editavel-avaliacao" data-id="' + resp.id + '" data-campo="valor">' + (resp.valor !== null ? resp.valor : '') + '</td>' +
-                '<td>' + acoesHtml + '</td>';
-
-            table.row.add($('<tr></tr>').html(linhaHtml)).draw(false);
-            atualizarIndicador();
+        $botao.prop('disabled', true);
+        // traditional: as listas das linhas novas vão como nova_nome=...&nova_nome=..., do jeito que o Django lê
+        $.post("{% url 'salvar-avaliacoes-ajax' %}", $.param(dados, true)).done(function (resp) {
+            if (resp && resp.ok) {
+                // Recarrega a mesma configuração: a tela volta com o que ficou gravado e a mensagem de sucesso.
+                alterado = false;
+                window.location.href = "{% url 'configurar-avaliacoes' %}";
+            } else {
+                $('#modalSalvar').modal('hide');
+                $botao.prop('disabled', false);
+                alert((resp && resp.erro) || erroPadrao);
+            }
+        }).fail(function () {
+            $('#modalSalvar').modal('hide');
+            $botao.prop('disabled', false);
+            alert(erroPadrao);
         });
     });
 });
 
+// Digitar na tabela só muda a tela; o Salvar grava.
+$(document).on('input', '.editavel-avaliacao, #linha-nova-avaliacao input', function () {
+    alterado = true;
+});
+
 $(document).on('blur', '.editavel-avaliacao', function () {
-    var $td = $(this);
-    $.post("{% url 'editar-avaliacao-ajax' %}", {
-        id: $td.data('id'),
-        campo: $td.data('campo'),
-        valor: $td.text().trim(),
-        csrfmiddlewaretoken: '{{ csrf_token }}'
-    }, function (resp) {
-        if (!resp.ok) {
-            alert(resp.erro);
-            return;
-        }
-        if ($td.data('campo') === 'valor') {
-            atualizarIndicador();
-        }
-    });
+    if ($(this).data('campo') === 'valor') {
+        atualizarIndicador();
+    }
 });
 
 $(document).on('click', '.tipo-dropdown-item', function (e) {
@@ -526,26 +601,20 @@ $(document).on('click', '.tipo-dropdown-item', function (e) {
     var $item = $(this);
     var $menu = $item.closest('.dropdown-menu');
     var $toggle = $menu.siblings('.tipo-dropdown-toggle');
-    var valor = $item.data('valor');
-    var id = $toggle.data('id');
 
     $toggle.text($item.text().trim());
-    $toggle.attr('data-valor', valor);
+    $toggle.attr('data-valor', $item.data('valor'));
     $menu.find('.tipo-dropdown-item').removeClass('active');
     $item.addClass('active');
+    alterado = true;
+});
 
-    if (!id) return;
-
-    $.post("{% url 'editar-avaliacao-ajax' %}", {
-        id: id,
-        campo: 'tipo',
-        valor: valor,
-        csrfmiddlewaretoken: '{{ csrf_token }}'
-    }, function (resp) {
-        if (!resp.ok) {
-            alert(resp.erro);
-        }
-    });
+// Sair da página com mudança ainda não salva: o navegador pede confirmação
+window.addEventListener('beforeunload', function (evento) {
+    if (alterado) {
+        evento.preventDefault();
+        evento.returnValue = '';
+    }
 });
 
 $('.table-responsive').on('show.bs.dropdown', function () {

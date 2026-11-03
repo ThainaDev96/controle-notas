@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao, Aula, Falta
-from aluno.calculo_notas import calcular_nota_final, classificar, teto_nota_avaliacao, montar_resumo_formula, calcular_pos_exame, _fmt_pt
+from aluno.calculo_notas import NOTA_MAXIMA, calcular_nota_final, classificar, montar_resumo_formula, calcular_pos_exame, _fmt_pt
 from aluno.calculo_frequencia import calcular_frequencia
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.password_validation import validate_password, password_validators_help_texts
@@ -16,7 +16,6 @@ from django.views.decorators.http import require_POST
 from django.utils import timezone
 from datetime import datetime, timedelta, timezone as dt_timezone
 from functools import wraps
-import json
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 
@@ -57,12 +56,76 @@ def professor_dashboard(request):
     # O painel do professor foi substituído pelo diário de classe; o endereço antigo continua valendo.
     return redirect("diario-classe")
 
+def _exige_professor(view):
+    """Telas só do professor logado (mesma checagem do dashboard_admin)."""
+    @wraps(view)
+    def view_do_professor(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        if not request.user.groups.filter(name='professor').exists():
+            return HttpResponseForbidden("Acesso restrito ao professor.")
+        return view(request, *args, **kwargs)
+    return view_do_professor
+
 def _avaliacoes_da_turma(turma):
     # A avaliação é da disciplina; a turma herda as da disciplina dela.
     return Avaliacao.objects.filter(disciplina_id=turma.disciplina_id)
 
-def _matricula_ativa(aluno_id, turma):
-    return get_object_or_404(Matricula, aluno_id=aluno_id, turma=turma, ativo=True)
+SITUACAO_TEXTO = {
+    'cursando': 'Cursando',
+    'aprovado': 'Aprovado',
+    'exame': 'Exame',
+    'reprovado': 'Reprovado',
+}
+
+def _exame_aberto(nota):
+    """O exame só é lançado para quem está em exame e ainda não fez."""
+    return nota.situacao == 'exame' and nota.nota_exame is None
+
+def _linhas_tabela_notas(turma, avaliacoes):
+    """
+    Uma linha por aluno ativo da turma para a tabela de notas, a mesma na Lista e no Cadastro de Notas.
+    Matrícula sem Nota ainda = nenhuma nota lançada, igual a "cursando".
+    """
+    alunos = User.objects.filter(
+        matricula__turma_id=turma.id, matricula__turma__ativo=True, matricula__ativo=True
+    ).exclude(groups__name='professor').distinct().order_by('first_name')
+
+    matriculas = {
+        m.aluno_id: m
+        for m in Matricula.objects.filter(turma=turma, ativo=True)
+    }
+    resumos = {
+        n.matricula_id: n
+        for n in Nota.objects.filter(matricula__in=matriculas.values())
+    }
+    # Por aluno e só as lançadas: mesmo com Nota ou Matrícula duplicada, a nota lançada não se perde.
+    notas_lancadas = {
+        (na.nota.matricula.aluno_id, na.avaliacao_id): na.nota_obtida
+        for na in NotaAvaliacao.objects.filter(
+            nota__matricula__turma=turma,
+            nota__matricula__ativo=True,
+            avaliacao__in=avaliacoes,
+            nota_obtida__isnull=False,
+        ).select_related('nota__matricula')
+    }
+
+    linhas = []
+    for aluno in alunos:
+        resumo = resumos.get(matriculas[aluno.id].id)
+        linhas.append({
+            'aluno': aluno,
+            'notas': [
+                {'avaliacao': av, 'valor': notas_lancadas.get((aluno.id, av.id))}
+                for av in avaliacoes
+            ],
+            'nota_id': resumo.id if resumo else None,
+            'media_final': resumo.media_final if resumo else None,
+            'situacao_display': SITUACAO_TEXTO.get(resumo.situacao, 'Cursando') if resumo else 'Cursando',
+            'nota_exame': resumo.nota_exame if resumo else None,
+            'exame_aberto': bool(resumo) and _exame_aberto(resumo),
+        })
+    return linhas
 
 def _recalcular_media_disciplina(matricula):
     turma = matricula.turma
@@ -70,7 +133,8 @@ def _recalcular_media_disciplina(matricula):
     nota, _ = Nota.objects.get_or_create(
         matricula=matricula, defaults={'situacao': 'cursando'}
     )
-    avaliacoes = list(_avaliacoes_da_turma(turma))
+    # Sempre na mesma ordem: a soma de números quebrados muda conforme a ordem, e o arredondamento junto.
+    avaliacoes = list(_avaliacoes_da_turma(turma).order_by('id'))
     notas_lancadas = {
         na.avaliacao_id: na.nota_obtida
         for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
@@ -81,13 +145,36 @@ def _recalcular_media_disciplina(matricula):
         notas_avaliacao = [(av, notas_lancadas[av.id]) for av in avaliacoes]
         nota.media_final = calcular_nota_final(disciplina, notas_avaliacao)
         nota.situacao = classificar(nota.media_final)
+        # O exame lançado nunca é apagado aqui. Quem já fez o exame não volta para a situação das notas: ele decide.
+        if nota.nota_exame is not None and nota.media_final is not None:
+            _, nota.situacao = calcular_pos_exame(nota.media_final, nota.nota_exame)
     else:
         nota.media_final = None
         nota.situacao = 'cursando'
 
-    nota.nota_exame = None
     nota.save()
     return nota
+
+def _recalcular_notas_da_disciplina(disciplina):
+    """
+    O peso de uma avaliação mudou: atualiza a MF de quem já tem todas as notas da disciplina.
+    Quem continua com a mesma MF fica como está.
+    """
+    avaliacoes = list(Avaliacao.objects.filter(disciplina=disciplina).order_by('id'))
+    notas = list(Nota.objects.filter(
+        matricula__turma__disciplina=disciplina, matricula__turma__ativo=True, matricula__ativo=True
+    ).select_related('matricula__turma__disciplina'))
+
+    lancadas_por_nota = {}
+    for na in NotaAvaliacao.objects.filter(nota__in=notas, avaliacao__in=avaliacoes, nota_obtida__isnull=False):
+        lancadas_por_nota.setdefault(na.nota_id, {})[na.avaliacao_id] = na.nota_obtida
+
+    for nota in notas:
+        lancadas = lancadas_por_nota.get(nota.id, {})
+        if avaliacoes and len(lancadas) == len(avaliacoes):
+            media = calcular_nota_final(disciplina, [(av, lancadas[av.id]) for av in avaliacoes])
+            if media != nota.media_final:
+                _recalcular_media_disciplina(nota.matricula)
 
 def lista_notas(request):
     if request.GET.get('limpar'):
@@ -95,15 +182,14 @@ def lista_notas(request):
         request.session.pop('filtro_notas_turma', None)
         return redirect('lista-notas')
 
-    disciplina_id = request.POST.get('disciplina', '')
-    turma_id      = request.POST.get('turma', '')
-
     if request.method == 'POST':
-        request.session['filtro_notas_disciplina'] = disciplina_id
-        request.session['filtro_notas_turma'] = turma_id
-    else:
-        disciplina_id = request.session.get('filtro_notas_disciplina', '')
-        turma_id      = request.session.get('filtro_notas_turma', '')
+        request.session['filtro_notas_disciplina'] = request.POST.get('disciplina', '')
+        request.session['filtro_notas_turma'] = request.POST.get('turma', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('lista-notas')
+
+    disciplina_id = request.session.get('filtro_notas_disciplina', '')
+    turma_id      = request.session.get('filtro_notas_turma', '')
 
     disciplinas = Disciplina.objects.filter(ativo=True)
     turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True).order_by('-ano', 'nome') if disciplina_id else Turma.objects.none()
@@ -119,57 +205,14 @@ def lista_notas(request):
         sem_avaliacoes = len(avaliacoes) == 0
 
         if not sem_avaliacoes:
-            alunos = User.objects.filter(
-                matricula__turma_id=turma_id, matricula__turma__ativo=True, matricula__ativo=True
-            ).exclude(groups__name='professor').distinct().order_by('first_name')
-
-            matriculas = {
-                m.aluno_id: m
-                for m in Matricula.objects.filter(turma=turma_obj, ativo=True)
-            }
-            resumos = {
-                n.matricula.aluno_id: n
-                for n in Nota.objects.filter(
-                    matricula__in=matriculas.values()
-                ).select_related('matricula')
-            }
-
             # Garante um registro Nota pra cada aluno matriculado, mesmo sem nenhuma
             # nota lançada ainda, pra editar/excluir aparecerem em todas as linhas.
-            for aluno in alunos:
-                if aluno.id not in resumos:
-                    resumos[aluno.id], _ = Nota.objects.get_or_create(
-                        matricula=matriculas[aluno.id], defaults={'situacao': 'cursando'}
-                    )
+            for matricula in Matricula.objects.filter(
+                turma=turma_obj, turma__ativo=True, ativo=True, nota__isnull=True
+            ).exclude(aluno__groups__name='professor'):
+                Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
 
-            notas_lancadas = {
-                (na.nota.matricula.aluno_id, na.avaliacao_id): na.nota_obtida
-                for na in NotaAvaliacao.objects.filter(
-                    nota__in=resumos.values(), avaliacao__in=avaliacoes
-                ).select_related('nota__matricula')
-            }
-
-            situacao_display = {
-                'cursando': 'Cursando',
-                'aprovado': 'Aprovado',
-                'exame': 'Exame',
-                'reprovado': 'Reprovado',
-            }
-
-            for aluno in alunos:
-                resumo = resumos[aluno.id]
-                alunos_notas.append({
-                    'aluno': aluno,
-                    'notas': [
-                        {'avaliacao_id': av.id, 'valor': notas_lancadas.get((aluno.id, av.id))}
-                        for av in avaliacoes
-                    ],
-                    'nota_id': resumo.id,
-                    'media_final': resumo.media_final,
-                    'situacao_raw': resumo.situacao,
-                    'situacao_display': situacao_display.get(resumo.situacao, 'Cursando'),
-                    'nota_exame': resumo.nota_exame,
-                })
+            alunos_notas = _linhas_tabela_notas(turma_obj, avaliacoes)
 
     return render(request, "professor/lista_notas.html", {
         "disciplinas":            disciplinas,
@@ -189,15 +232,34 @@ def _notas_do_aluno(aluno, ano=None):
         notas = notas.filter(matricula__turma__ano=ano)
     return notas
 
+def _turmas_sem_nota(aluno, ano=None):
+    """
+    Turmas do aluno ainda sem registro de Nota: nenhuma nota lançada, igual a "cursando".
+    Disciplina sem avaliação fica de fora, porque não há o que lançar.
+    """
+    turmas = Turma.objects.filter(
+        matricula__aluno=aluno, matricula__ativo=True, ativo=True,
+        disciplina__ativo=True, disciplina__avaliacao__isnull=False,
+    )
+    if ano:
+        turmas = turmas.filter(ano=ano)
+    com_nota = Nota.objects.filter(matricula__aluno=aluno, matricula__ativo=True).values('matricula__turma_id')
+    return list(turmas.exclude(id__in=com_nota).select_related('disciplina').order_by('disciplina__nome').distinct())
+
 def boletim_aluno(request):
-    ano_selecionado = request.POST.get('ano', '')
+    if request.GET.get('limpar'):
+        request.session.pop('boletim_ano', None)
+        return redirect('minhas-notas')
 
     if request.method == 'POST':
-        request.session['boletim_ano'] = ano_selecionado
-    else:
-        ano_selecionado = request.session.get('boletim_ano', str(datetime.now().year))
+        request.session['boletim_ano'] = request.POST.get('ano', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('minhas-notas')
+
+    ano_selecionado = request.session.get('boletim_ano', str(datetime.now().year))
 
     notas = _notas_do_aluno(request.user, ano_selecionado)
+    turmas_sem_nota = _turmas_sem_nota(request.user, ano_selecionado)
 
     turmas_aluno = Turma.objects.filter(matricula__aluno=request.user, matricula__ativo=True)
 
@@ -207,7 +269,7 @@ def boletim_aluno(request):
     total_aprovadas = notas.filter(situacao='aprovado').count()
     total_exame = notas.filter(situacao='exame').count()
     reprovadas = notas.filter(situacao='reprovado').count()
-    total_cursando = notas.filter(situacao='cursando').count()
+    total_cursando = notas.filter(situacao='cursando').count() + len(turmas_sem_nota)
 
     todas_lancadas = total_cursando == 0
     if not todas_lancadas or notas.count() == 0 or total_exame > 0:
@@ -236,6 +298,7 @@ def boletim_aluno(request):
 
     return render(request, "aluno/minhas_notas.html", {
         "notas":           notas,
+        "turmas_sem_nota": turmas_sem_nota,
         "anos":            anos,
         "ano_selecionado": ano_selecionado,
         "situacao_final":  situacao_final,
@@ -254,24 +317,41 @@ def deletar_nota(request, id):
     messages.success(request, "Nota deletada com sucesso!")
     return redirect("lista-notas")
 
+def _mesma_nota(digitada, gravada):
+    """O formulário mostra a nota com até 2 casas: diferença menor que isso não é mudança."""
+    if digitada is None or gravada is None:
+        return digitada is None and gravada is None
+    return abs(digitada - gravada) < 0.0051
+
 def editar_nota(request, id):
     nota = get_object_or_404(Nota.objects.select_related('matricula__turma__disciplina', 'matricula__aluno'), id=id)
     avaliacoes = _avaliacoes_da_turma(nota.turma).order_by('id')
+
+    notas_lancadas = {
+        na.avaliacao_id: na.nota_obtida
+        for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
+    }
 
     if request.method == "POST":
         valores = {}
         erro = None
         for avaliacao in avaliacoes:
             valor = request.POST.get(f'nota_avaliacao_{avaliacao.id}')
+            # O campo bloqueado não vem no envio: se a nota entrou pelo Cadastro depois de abrir a tela, ela fica.
+            if valor is None:
+                continue
             if valor:
+                # Aqui só se corrige o que já foi lançado: nota nova entra pelo Cadastro.
+                if notas_lancadas.get(avaliacao.id) is None:
+                    erro = f"A nota de '{avaliacao.nome}' ainda não foi lançada. Para lançar, use o Cadastro de Notas."
+                    break
                 try:
                     valor_float = float(valor)
                 except ValueError:
                     erro = f"Nota inválida em '{avaliacao.nome}'."
                     break
-                teto = teto_nota_avaliacao(nota.disciplina, avaliacao)
-                if valor_float < 0 or valor_float > teto:
-                    erro = f"A nota de '{avaliacao.nome}' deve estar entre 0 e {teto}."
+                if not 0 <= valor_float <= NOTA_MAXIMA:
+                    erro = f"A nota de '{avaliacao.nome}' deve estar entre 0 e {NOTA_MAXIMA}."
                     break
                 valores[avaliacao.id] = valor_float
             else:
@@ -280,21 +360,24 @@ def editar_nota(request, id):
         if erro:
             messages.error(request, erro)
         else:
-            for avaliacao_id, valor_float in valores.items():
-                nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
-                nota_avaliacao.nota_obtida = valor_float
-                nota_avaliacao.save()
+            # Sem mudar nenhuma nota não grava nem recalcula.
+            with transaction.atomic():
+                mudou = False
+                for avaliacao_id, valor_float in valores.items():
+                    if _mesma_nota(valor_float, notas_lancadas.get(avaliacao_id)):
+                        continue
+                    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
+                    nota_avaliacao.nota_obtida = valor_float
+                    nota_avaliacao.save()
+                    mudou = True
 
-            _recalcular_media_disciplina(nota.matricula)
+                if mudou:
+                    _recalcular_media_disciplina(nota.matricula)
             messages.success(request, "Nota editada com sucesso!")
             return redirect("lista-notas")
 
     turma_do_aluno = nota.turma
 
-    notas_lancadas = {
-        na.avaliacao_id: na.nota_obtida
-        for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
-    }
     avaliacoes_com_nota = [
         {'avaliacao': av, 'valor': notas_lancadas.get(av.id)}
         for av in avaliacoes
@@ -311,10 +394,29 @@ def editar_nota(request, id):
         "sem_avaliacoes": not avaliacoes.exists(),
     })
 
+# Filtro do Cadastro de Notas: só os alunos com nota a cadastrar, ou só os que já têm todas (para ver).
+FILTROS_LANCAMENTO = {'a_cadastrar', 'cadastradas'}
+
+def _falta_cadastrar(linha):
+    """A linha ainda tem nota para cadastrar: alguma avaliação em branco ou o exame aberto."""
+    return linha['exame_aberto'] or any(n['valor'] is None for n in linha['notas'])
+
+@_exige_professor
 def cadastrar_notas(request):
     if request.GET.get('limpar'):
         request.session.pop('cadastro_notas_disciplina', None)
         request.session.pop('cadastro_notas_turma', None)
+        request.session.pop('cadastro_notas_lancamento', None)
+        return redirect('cadastrar-notas')
+
+    # "Limpar filtros" tira só o filtro das notas e continua na mesma turma.
+    if request.GET.get('limpar_filtro'):
+        request.session.pop('cadastro_notas_lancamento', None)
+        return redirect('cadastrar-notas')
+
+    if request.method == 'POST' and request.POST.get('acao') == 'filtrar_notas':
+        request.session['cadastro_notas_lancamento'] = request.POST.get('lancamento', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário.
         return redirect('cadastrar-notas')
 
     if request.method == 'POST' and request.POST.get('acao') == 'selecionar_turma':
@@ -329,106 +431,76 @@ def cadastrar_notas(request):
 
         return redirect('cadastrar-notas')
 
-    disciplina_id = request.session.get('cadastro_notas_disciplina', '')
-    turma_id      = request.session.get('cadastro_notas_turma', '')
+    # Turma guardada na sessão que não vale mais (inativa ou de outra disciplina) volta para a escolha.
+    turma_obj = Turma.objects.select_related('disciplina').filter(
+        id=_inteiro(request.session.get('cadastro_notas_turma')),
+        disciplina_id=_inteiro(request.session.get('cadastro_notas_disciplina')),
+        ativo=True,
+    ).first()
 
-    if request.method == 'POST' and request.POST.get('acao') == 'salvar_notas':
-        aluno_id = request.POST.get('aluno')
-
-        if not aluno_id:
-            messages.error(request, "Selecione o aluno antes de salvar.")
-        else:
-            disciplina = get_object_or_404(Disciplina, id=disciplina_id)
-            turma = get_object_or_404(Turma, id=turma_id, disciplina_id=disciplina_id)
-            matricula = _matricula_ativa(aluno_id, turma)
-            nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
-            valores = {}
-            erro = None
-            for avaliacao in _avaliacoes_da_turma(turma):
-                valor = request.POST.get(f'nota_avaliacao_{avaliacao.id}')
-                if valor:
-                    try:
-                        valor_float = float(valor)
-                    except ValueError:
-                        erro = f"Nota inválida em '{avaliacao.nome}'."
-                        break
-                    teto = teto_nota_avaliacao(disciplina, avaliacao)
-                    if valor_float < 0 or valor_float > teto:
-                        erro = f"A nota de '{avaliacao.nome}' deve estar entre 0 e {teto}."
-                        break
-                    valores[avaliacao.id] = valor_float
-                else:
-                    valores[avaliacao.id] = None
-
-            if erro:
-                messages.error(request, erro)
-            else:
-                for avaliacao_id, valor_float in valores.items():
-                    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
-                    nota_avaliacao.nota_obtida = valor_float
-                    nota_avaliacao.save()
-
-                _recalcular_media_disciplina(matricula)
-                messages.success(request, 'Notas cadastradas com sucesso!')
-                return redirect('cadastrar-notas')
-
-    disciplinas = Disciplina.objects.filter(ativo=True)
-    turmas = Turma.objects.filter(disciplina_id=disciplina_id, ativo=True).order_by('-ano', 'nome') if disciplina_id else Turma.objects.none()
-
-    disciplina_obj = Disciplina.objects.filter(id=disciplina_id).first() if disciplina_id else None
-    turma_obj = Turma.objects.filter(id=turma_id).first() if turma_id else None
+    # Valor que não é um dos filtros (ou nenhum) mostra todas as notas.
+    lancamento = request.session.get('cadastro_notas_lancamento', '')
+    if lancamento not in FILTROS_LANCAMENTO:
+        lancamento = ''
 
     avaliacoes = []
-    alunos = []
+    alunos_notas = []
+    tem_alunos = False
     sem_avaliacoes = False
-    notas_por_aluno_json = '{}'
+    todas_lancadas = False
 
-    if turma_obj and str(turma_obj.disciplina_id) == str(disciplina_id):
+    if turma_obj:
         avaliacoes = list(_avaliacoes_da_turma(turma_obj).order_by('id'))
         sem_avaliacoes = len(avaliacoes) == 0
 
         if not sem_avaliacoes:
-            alunos = User.objects.filter(
-                matricula__turma_id=turma_id, matricula__turma__ativo=True, matricula__ativo=True
-            ).exclude(groups__name='professor').distinct().order_by('first_name')
-
-            # Pré-carrega as notas já lançadas de cada aluno para não apagar
-            # dados existentes quando o formulário for salvo com campos em branco.
-            notas_por_aluno = {aluno.id: {} for aluno in alunos}
-            for na in NotaAvaliacao.objects.filter(
-                nota__matricula__turma=turma_obj, nota__matricula__ativo=True, avaliacao__in=avaliacoes
-            ).select_related('nota__matricula'):
-                aluno_da_nota = na.nota.matricula.aluno_id
-                if aluno_da_nota in notas_por_aluno:
-                    notas_por_aluno[aluno_da_nota][na.avaliacao_id] = na.nota_obtida
-            notas_por_aluno_json = json.dumps(notas_por_aluno)
+            linhas = _linhas_tabela_notas(turma_obj, avaliacoes)
+            tem_alunos = bool(linhas)
+            # O aviso de "todas lançadas" vale para a turma inteira, com ou sem filtro.
+            todas_lancadas = tem_alunos and not any(_falta_cadastrar(linha) for linha in linhas)
+            alunos_notas = [
+                linha for linha in linhas
+                if not lancamento or _falta_cadastrar(linha) == (lancamento == 'a_cadastrar')
+            ]
 
     return render(request, 'professor/cadastrar_notas.html', {
         "editando": False,
-        "disciplinas": disciplinas,
-        "turmas": turmas,
-        "disciplina_obj": disciplina_obj,
+        "disciplinas": Disciplina.objects.filter(ativo=True),
         "turma_obj": turma_obj,
         "avaliacoes": avaliacoes,
-        "alunos": alunos,
+        "alunos_notas": alunos_notas,
+        "tem_alunos": tem_alunos,
+        "lancamento_selecionado": lancamento,
         "sem_avaliacoes": sem_avaliacoes,
-        "notas_por_aluno_json": notas_por_aluno_json,
-        "disciplina_selecionada": disciplina_id,
-        "turma_selecionada": turma_id,
+        "todas_lancadas": todas_lancadas,
     })
 
-def _validar_total_avaliacoes(disciplina, valor_novo, excluir_id=None):
+def _erro_no_valor_da_avaliacao(valor):
+    # Escrito assim para recusar também "nan" e "inf", que o float() aceita e estragariam a MF.
+    if not 0 <= (valor or 0) < float('inf'):
+        return "O valor da avaliação deve ser um número de 0 para cima."
+    return None
+
+def _erro_no_total_das_avaliacoes(disciplina, novo_total):
     limite = disciplina.limite_valor_avaliacoes
     if limite is None:
         return None
 
-    valor_novo = valor_novo or 0
-    total_atual = disciplina.total_valor_avaliacoes(excluir_id=excluir_id)
-    novo_total = round(total_atual + valor_novo, 2)
-
+    novo_total = round(novo_total, 2)
     if novo_total > limite:
         return f"A soma dos valores das avaliações não pode passar de {limite:g}. Ficaria em {novo_total:g}."
     return None
+
+def _validar_total_avaliacoes(disciplina, valor_novo, excluir_id=None):
+    valor_novo = valor_novo or 0
+
+    erro = _erro_no_valor_da_avaliacao(valor_novo)
+    if erro:
+        return erro
+
+    if disciplina.limite_valor_avaliacoes is None:
+        return None
+    return _erro_no_total_das_avaliacoes(disciplina, disciplina.total_valor_avaliacoes(excluir_id=excluir_id) + valor_novo)
 
 MODOS_CALCULO_VALIDOS = {'soma', 'ponderada', 'aritmetica'}
 
@@ -439,13 +511,13 @@ def configurar_avaliacoes(request):
         return redirect('configurar-avaliacoes')
 
     if request.method == 'POST':
-        disciplina_id = request.POST.get('disciplina', '')
-        modo = request.POST.get('modo', '')
-        request.session['config_aval_disciplina'] = disciplina_id
-        request.session['config_aval_modo'] = modo
-    else:
-        disciplina_id = request.session.get('config_aval_disciplina', '')
-        modo = request.session.get('config_aval_modo', '')
+        request.session['config_aval_disciplina'] = request.POST.get('disciplina', '')
+        request.session['config_aval_modo'] = request.POST.get('modo', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('configurar-avaliacoes')
+
+    disciplina_id = request.session.get('config_aval_disciplina', '')
+    modo = request.session.get('config_aval_modo', '')
 
     # "Trocar": volta pro estado de seleção sem apagar o que já estava escolhido,
     # pra reabrir os selects pré-preenchidos em vez de zerar a disciplina/modo.
@@ -471,18 +543,16 @@ def configurar_avaliacoes(request):
                 # quando a disciplina tem avaliação, então isso só ocorre em uso fora do padrão.
                 messages.error(request, "Essa disciplina já tem avaliações cadastradas. Apague as avaliações antes de trocar o modo.")
                 return redirect(f"{reverse('configurar-avaliacoes')}?trocar=1")
+            # Escolher o modo só abre a configuração: ele vai para o banco junto com a primeira
+            # avaliação salva (cadastrar_avaliacao_ajax), não ao clicar em Configurar.
             disciplina_atual.modo_calculo = modo
-            disciplina_atual.save()
 
         avaliacoes = Avaliacao.objects.select_related('disciplina').filter(
             disciplina_id=disciplina_id
         ).order_by('id')
 
         if avaliacoes:
-            notas_exemplo = [
-                (av, round(teto_nota_avaliacao(disciplina_atual, av) * 0.8 * 2) / 2)
-                for av in avaliacoes
-            ]
+            notas_exemplo = [(av, NOTA_MAXIMA * 0.8) for av in avaliacoes]
             resumo_exemplo = montar_resumo_formula(disciplina_atual, notas_exemplo)
 
     disciplinas = Disciplina.objects.filter(ativo=True).annotate(
@@ -560,11 +630,18 @@ def editar_avaliacao(request, id):
                 "disciplinas": Disciplina.objects.filter(ativo=True),
             })
 
+        peso_mudou = (float(valor) if valor else None) != avaliacao.valor
+
         avaliacao.nome = request.POST.get("nome")
         avaliacao.tipo = request.POST.get("tipo")
         avaliacao.valor = valor
         avaliacao.disciplina_id = disciplina_id
-        avaliacao.save()
+
+        with transaction.atomic():
+            avaliacao.save()
+            if peso_mudou:
+                _recalcular_notas_da_disciplina(disciplina)
+
         messages.success(request, "Avaliação editada com sucesso!")
         return redirect("configurar-avaliacoes")
 
@@ -592,13 +669,27 @@ def cadastrar_avaliacao_ajax(request):
         return JsonResponse({'ok': False, 'erro': 'Informe o nome e a disciplina antes de salvar.'})
 
     disciplina = get_object_or_404(Disciplina, id=disciplina_id)
+
+    # Salvar a primeira avaliação é que salva a configuração: o modo escolhido na tela
+    # (guardado na sessão) vai para o banco agora. Com avaliação já salva, o modo não muda.
+    primeira = not disciplina.avaliacao_set.exists()
+    if primeira:
+        modo = request.session.get('config_aval_modo', '')
+        if request.session.get('config_aval_disciplina') == str(disciplina.id) and modo in MODOS_CALCULO_VALIDOS:
+            disciplina.modo_calculo = modo
+    if not disciplina.modo_calculo:
+        return JsonResponse({'ok': False, 'erro': 'Escolha o modo de cálculo dessa disciplina antes de salvar.'})
+
     erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
     if erro:
         return JsonResponse({'ok': False, 'erro': erro})
 
-    avaliacao = Avaliacao.objects.create(
-        nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id
-    )
+    with transaction.atomic():
+        if primeira:
+            disciplina.save(update_fields=['modo_calculo'])
+        avaliacao = Avaliacao.objects.create(
+            nome=nome, tipo=tipo, valor=valor, disciplina_id=disciplina_id
+        )
 
     return JsonResponse({
         'ok': True,
@@ -619,23 +710,132 @@ def editar_avaliacao_ajax(request):
     if campo not in {'nome', 'tipo', 'valor'}:
         return JsonResponse({'ok': False, 'erro': 'Campo inválido'})
 
+    # A tabela salva ao sair da célula, mesmo sem mudança: só recalcula se o peso mudou de fato.
+    peso_mudou = False
     if campo == 'valor':
-        valor_float = float(valor) if valor else 0
+        texto = _numero_digitado(request)
+        try:
+            valor_float = float(texto) if texto else 0
+        except ValueError:
+            return JsonResponse({'ok': False, 'erro': 'Valor inválido.'})
         erro = _validar_total_avaliacoes(avaliacao.disciplina, valor_float, excluir_id=avaliacao.id)
         if erro:
             return JsonResponse({'ok': False, 'erro': erro})
-        avaliacao.valor = valor_float if valor else None
+        novo_peso = valor_float if texto else None
+        peso_mudou = novo_peso != avaliacao.valor
+        avaliacao.valor = novo_peso
     else:
         if not valor:
             return JsonResponse({'ok': False, 'erro': 'Esse campo não pode ficar vazio'})
         setattr(avaliacao, campo, valor)
 
-    avaliacao.save()
+    with transaction.atomic():
+        avaliacao.save()
+        if peso_mudou:
+            _recalcular_notas_da_disciplina(avaliacao.disciplina)
 
     return JsonResponse({
         'ok': True,
         'tipo_display': avaliacao.get_tipo_display(),
     })
+
+TIPOS_AVALIACAO = {tipo for tipo, _ in Avaliacao._meta.get_field('tipo').choices}
+TAMANHO_NOME_AVALIACAO = Avaliacao._meta.get_field('nome').max_length
+
+def _peso_digitado(texto):
+    """Peso digitado na tabela, aceitando vírgula ou ponto: None se ficou em branco. Levanta ValueError se não for número."""
+    texto = (texto or '').strip().replace(',', '.')
+    return float(texto) if texto else None
+
+def _erro_no_nome_ou_tipo(nome, tipo):
+    if not nome:
+        return 'Informe o nome da avaliação.'
+    if len(nome) > TAMANHO_NOME_AVALIACAO:
+        return f'O nome da avaliação pode ter até {TAMANHO_NOME_AVALIACAO} caracteres.'
+    if tipo not in TIPOS_AVALIACAO:
+        return 'Tipo inválido.'
+    return None
+
+@require_POST
+@_exige_professor
+def salvar_avaliacoes_ajax(request):
+    """
+    Botão Salvar da tela Configurar Avaliações: grava de uma vez as avaliações novas e o que mudou
+    nas já gravadas. Tudo é conferido antes; se algo for recusado, nada é gravado.
+    """
+    with transaction.atomic():
+        # Trava a disciplina: dois envios ao mesmo tempo não passam juntos do limite dos pesos.
+        disciplina = get_object_or_404(Disciplina.objects.select_for_update(), id=_inteiro(request.POST.get('disciplina')))
+        gravadas = list(Avaliacao.objects.filter(disciplina=disciplina).order_by('id'))
+
+        novas = []
+        for nome, tipo, valor in zip(request.POST.getlist('nova_nome'), request.POST.getlist('nova_tipo'), request.POST.getlist('nova_valor')):
+            nome, tipo = nome.strip(), tipo or 'prova'
+            erro = _erro_no_nome_ou_tipo(nome, tipo)
+            if erro:
+                return JsonResponse({'ok': False, 'erro': erro})
+            try:
+                valor = _peso_digitado(valor)
+            except ValueError:
+                return JsonResponse({'ok': False, 'erro': 'Valor inválido.'})
+            novas.append(Avaliacao(nome=nome, tipo=tipo, valor=valor, disciplina=disciplina))
+
+        # Salvar a primeira avaliação é que salva a configuração: o modo escolhido na tela
+        # (guardado na sessão) vai para o banco agora. Com avaliação já salva, o modo não muda.
+        primeira = not gravadas and bool(novas)
+        if primeira:
+            modo = request.session.get('config_aval_modo', '')
+            if request.session.get('config_aval_disciplina') == str(disciplina.id) and modo in MODOS_CALCULO_VALIDOS:
+                disciplina.modo_calculo = modo
+        if novas and not disciplina.modo_calculo:
+            return JsonResponse({'ok': False, 'erro': 'Escolha o modo de cálculo dessa disciplina antes de salvar.'})
+
+        # Campo que não vem no envio fica como está.
+        alteradas = []
+        peso_mudou = False
+        for avaliacao in gravadas:
+            nome = request.POST.get(f'nome_{avaliacao.id}')
+            tipo = request.POST.get(f'tipo_{avaliacao.id}')
+            valor = request.POST.get(f'valor_{avaliacao.id}')
+            nome = avaliacao.nome if nome is None else nome.strip()
+            tipo = avaliacao.tipo if tipo is None else tipo
+            erro = _erro_no_nome_ou_tipo(nome, tipo)
+            if erro:
+                return JsonResponse({'ok': False, 'erro': erro})
+            if valor is None:
+                novo_peso = avaliacao.valor
+            else:
+                try:
+                    novo_peso = _peso_digitado(valor)
+                except ValueError:
+                    return JsonResponse({'ok': False, 'erro': 'Valor inválido.'})
+            if (nome, tipo, novo_peso) != (avaliacao.nome, avaliacao.tipo, avaliacao.valor):
+                peso_mudou = peso_mudou or novo_peso != avaliacao.valor
+                avaliacao.nome, avaliacao.tipo, avaliacao.valor = nome, tipo, novo_peso
+                alteradas.append(avaliacao)
+
+        # Os mesmos limites de quando cada avaliação era salva sozinha, agora sobre o total final.
+        for avaliacao in gravadas + novas:
+            erro = _erro_no_valor_da_avaliacao(avaliacao.valor)
+            if erro:
+                return JsonResponse({'ok': False, 'erro': erro})
+        erro = _erro_no_total_das_avaliacoes(disciplina, sum(avaliacao.valor or 0 for avaliacao in gravadas + novas))
+        if erro:
+            return JsonResponse({'ok': False, 'erro': erro})
+
+        if primeira:
+            disciplina.save(update_fields=['modo_calculo'])
+        for avaliacao in alteradas:
+            avaliacao.save(update_fields=['nome', 'tipo', 'valor'])
+        for avaliacao in novas:
+            avaliacao.save()
+        # Só recalcula as médias se algum peso mudou de fato, uma vez só (o exame lançado nunca é apagado).
+        if peso_mudou:
+            _recalcular_notas_da_disciplina(disciplina)
+
+    # A tela recarrega depois da resposta e mostra a mensagem, como nos outros botões Salvar.
+    messages.success(request, 'Avaliações salvas com sucesso!')
+    return JsonResponse({'ok': True})
 
 def alunos_por_turma(request):
     turma_nome = request.GET.get('turma_nome')
@@ -678,51 +878,101 @@ def turmas_por_disciplina(request):
 
     return JsonResponse({'turmas': list(turmas)})
 
+def _nota_texto(valor):
+    """Nota do jeito que o template mostra (ex.: 8.5), para a célula não mudar ao recarregar a página."""
+    return str(valor) if valor is not None else '-'
+
+def _numero_digitado(request):
+    """Texto digitado na célula, aceitando vírgula ou ponto."""
+    return (request.POST.get('valor') or '').strip().replace(',', '.')
+
 @require_POST
+@_exige_professor
 def editar_nota_avaliacao_ajax(request):
-    aluno_id = request.POST.get('aluno')
-    avaliacao_id = request.POST.get('avaliacao')
-    valor = request.POST.get('valor')
+    """
+    Salva a nota digitada na célula da tabela de notas, na Lista de Notas e no Cadastro de Notas.
+    Com so_lancar (Cadastro) só grava em avaliação ainda sem nota: nota já lançada não muda por lá.
+    Sem so_lancar (Lista) só muda a nota já lançada: nota nova não entra por lá.
+    """
+    so_lancar = request.POST.get('so_lancar') == '1'
 
-    avaliacao = get_object_or_404(Avaliacao, id=avaliacao_id)
-    turma = get_object_or_404(Turma, id=request.POST.get('turma'), disciplina_id=avaliacao.disciplina_id)
-    matricula = _matricula_ativa(aluno_id, turma)
+    avaliacao = Avaliacao.objects.filter(id=_inteiro(request.POST.get('avaliacao'))).first()
+    if not avaliacao:
+        return JsonResponse({'ok': False, 'erro': 'Avaliação não encontrada.'})
 
-    if valor:
+    texto = _numero_digitado(request)
+    if texto:
         try:
-            valor_float = float(valor)
+            valor = float(texto)
         except ValueError:
             return JsonResponse({'ok': False, 'erro': 'Nota inválida.'})
 
-        teto = teto_nota_avaliacao(avaliacao.disciplina, avaliacao)
-        if valor_float < 0 or valor_float > teto:
-            return JsonResponse({'ok': False, 'erro': f'A nota deve estar entre 0 e {teto}.'})
+        # Escrito assim para recusar também "nan", que não é maior nem menor que nenhum número.
+        if not 0 <= valor <= NOTA_MAXIMA:
+            return JsonResponse({'ok': False, 'erro': f'A nota deve estar entre 0 e {NOTA_MAXIMA}.'})
+    elif so_lancar:
+        return JsonResponse({'ok': False, 'erro': 'Informe a nota.'})
     else:
-        valor_float = None
+        # Na Lista, limpar a célula apaga a nota.
+        valor = None
 
-    nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
-    nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao_id=avaliacao_id)
-    nota_avaliacao.nota_obtida = valor_float
-    nota_avaliacao.save()
+    with transaction.atomic():
+        # Trava a matrícula: as notas do mesmo aluno entram uma de cada vez, então o registro Nota
+        # não duplica e o último recálculo da média já enxerga todas elas.
+        matricula = Matricula.objects.select_for_update(of=('self',)).filter(
+            aluno_id=_inteiro(request.POST.get('aluno')),
+            turma_id=_inteiro(request.POST.get('turma')),
+            ativo=True,
+            turma__ativo=True,
+            turma__disciplina_id=avaliacao.disciplina_id,
+        ).first()
+        if not matricula:
+            return JsonResponse({'ok': False, 'erro': 'Aluno não encontrado nessa turma.'})
 
-    nota = _recalcular_media_disciplina(matricula)
+        if not so_lancar and valor is not None and not NotaAvaliacao.objects.filter(
+            nota__matricula=matricula, avaliacao=avaliacao, nota_obtida__isnull=False
+        ).exists():
+            return JsonResponse({'ok': False, 'erro': 'Essa nota ainda não foi lançada. Para lançar, use o Cadastro de Notas.'})
 
-    situacao_display = {
-        'cursando': 'Cursando',
-        'aprovado': 'Aprovado',
-        'exame': 'Exame',
-        'reprovado': 'Reprovado',
+        nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
+        nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao=avaliacao)
+
+        # Sem mudar a nota não grava nem recalcula.
+        gravou = 0
+        if valor != nota_avaliacao.nota_obtida:
+            a_gravar = NotaAvaliacao.objects.filter(id=nota_avaliacao.id)
+            if so_lancar:
+                # Só grava se continuar sem nota: quem chega depois não sobrescreve.
+                a_gravar = a_gravar.filter(nota_obtida__isnull=True)
+            gravou = a_gravar.update(nota_obtida=valor)
+
+        if gravou:
+            nota = _recalcular_media_disciplina(matricula)
+        else:
+            nota_avaliacao.refresh_from_db()
+            valor = nota_avaliacao.nota_obtida
+
+    ja_lancada = so_lancar and not gravou
+    resposta = {
+        'ok': not ja_lancada,
+        'valor': '' if valor is None else str(valor),
+        # Média zero com traço, como o |default:"-" da tabela.
+        'media_final': _nota_texto(nota.media_final or None),
+        'situacao': SITUACAO_TEXTO.get(nota.situacao, 'Cursando'),
+        'nota_exame': _nota_texto(nota.nota_exame),
+        'nota_id': nota.id,
+        'exame_aberto': _exame_aberto(nota),
     }
-    return JsonResponse({
-        'ok': True,
-        'media_final': nota.media_final,
-        'situacao': situacao_display.get(nota.situacao, nota.situacao),
-    })
+    if ja_lancada:
+        resposta['ja_lancada'] = True
+        resposta['erro'] = 'Essa nota já tinha sido lançada e não foi alterada. Para corrigir, use a Lista de Notas.'
+    return JsonResponse(resposta)
 
 @require_POST
+@_exige_professor
 def lancar_nota_exame_ajax(request):
-    nota = get_object_or_404(Nota, id=request.POST.get('id'))
-    valor = request.POST.get('valor')
+    nota = get_object_or_404(Nota, id=_inteiro(request.POST.get('id')))
+    valor = _numero_digitado(request)
 
     if nota.situacao != 'exame':
         return JsonResponse({'ok': False, 'erro': 'Essa nota não está em exame.'})
@@ -735,7 +985,8 @@ def lancar_nota_exame_ajax(request):
     except ValueError:
         return JsonResponse({'ok': False, 'erro': 'Nota inválida.'})
 
-    if valor_float < 0 or valor_float > 10:
+    # Escrito assim para recusar também "nan", que não é maior nem menor que nenhum número.
+    if not 0 <= valor_float <= 10:
         return JsonResponse({'ok': False, 'erro': 'A nota do exame deve estar entre 0 e 10.'})
 
     _, situacao_final = calcular_pos_exame(nota.media_final, valor_float)
@@ -743,25 +994,11 @@ def lancar_nota_exame_ajax(request):
     nota.situacao = situacao_final
     nota.save()
 
-    situacao_display = {
-        'aprovado': 'Aprovado',
-        'reprovado': 'Reprovado',
-    }
     return JsonResponse({
         'ok': True,
-        'situacao': situacao_display[situacao_final],
+        'situacao': SITUACAO_TEXTO[situacao_final],
+        'nota_exame': _nota_texto(valor_float),
     })
-
-def _exige_professor(view):
-    """As telas do diário de classe são só do professor logado (mesma checagem do dashboard_admin)."""
-    @wraps(view)
-    def view_do_professor(request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return redirect('login')
-        if not request.user.groups.filter(name='professor').exists():
-            return HttpResponseForbidden("Acesso restrito ao professor.")
-        return view(request, *args, **kwargs)
-    return view_do_professor
 
 def _inteiro(valor):
     """Número inteiro vindo de formulário ou da sessão, ou None se não for um."""
@@ -789,11 +1026,20 @@ def _datas_do_diario(request):
         return hoje, hoje - timedelta(days=1), hoje + timedelta(days=1)
 
 def _faltas_por_matricula(matriculas):
-    """Faltas de cada matrícula: registros Falta em aulas realizadas (cada um vale 1 período)."""
+    """Faltas de cada matrícula: registros Falta em aulas realizadas, justificadas ou não (cada um vale 1 período)."""
     return dict(
         Falta.objects.filter(matricula__in=matriculas, aula__realizada=True)
         .values('matricula_id').annotate(total=Count('id')).values_list('matricula_id', 'total')
     )
+
+# Estado de cada período no diário: presente, falta ou falta justificada.
+ESTADOS_DO_PERIODO = {'P', 'F', 'J'}
+
+def _estado_do_periodo(faltas_na_aula, matricula_id, periodo):
+    """P sem registro de Falta; F ou J conforme a Falta gravada for justificada ou não."""
+    if (matricula_id, periodo) not in faltas_na_aula:
+        return 'P'
+    return 'J' if faltas_na_aula[(matricula_id, periodo)] else 'F'
 
 def _aula_do_professor(aula_id, professor):
     """A aula enviada pelo diário, se a turma e a disciplina estiverem ativas e a disciplina for do professor."""
@@ -848,7 +1094,10 @@ def diario_classe(request):
             m.aluno_id: m
             for m in Matricula.objects.filter(turma=turma_atual, ativo=True)
         }
-        faltas_na_aula = set(Falta.objects.filter(aula=aula).values_list('matricula_id', 'periodo'))
+        faltas_na_aula = {
+            (matricula_id, periodo): justificada
+            for matricula_id, periodo, justificada in Falta.objects.filter(aula=aula).values_list('matricula_id', 'periodo', 'justificada')
+        }
         faltas_por_matricula = _faltas_por_matricula(list(matriculas.values()))
 
         for aluno in alunos:
@@ -857,9 +1106,9 @@ def diario_classe(request):
             linhas.append({
                 'aluno': aluno,
                 'matricula_id': matricula.id,
-                # Sem registro de Falta, o aluno está presente no período.
+                # Sem registro de Falta, o aluno está presente no período (P); com registro, F ou J (justificada).
                 'periodos': [
-                    {'numero': periodo, 'falta': (matricula.id, periodo) in faltas_na_aula}
+                    {'numero': periodo, 'estado': _estado_do_periodo(faltas_na_aula, matricula.id, periodo)}
                     for periodo in range(1, aula.periodos + 1)
                 ],
                 'faltas': faltas,
@@ -892,69 +1141,42 @@ def diario_classe(request):
 
 @require_POST
 @_exige_professor
-def aula_realizada_ajax(request):
+def salvar_diario_ajax(request):
     aula = _aula_do_professor(request.POST.get('aula'), request.user)
     if not aula:
         return JsonResponse({'ok': False, 'erro': 'Aula não encontrada.'})
 
-    # Desligar não apaga as faltas: elas ficam guardadas, só deixam de contar.
-    aula.realizada = request.POST.get('realizada') == '1'
-    aula.save(update_fields=['realizada'])
+    with transaction.atomic():
+        # Trava a aula: dois envios ao mesmo tempo não gravam a mesma falta duas vezes.
+        aula = Aula.objects.select_for_update().get(id=aula.id)
+        # Aula salva como realizada não volta para não realizada: as faltas lançadas continuam valendo.
+        realizada_na_tela = request.POST.get('realizada') == '1'
+        aula.realizada = aula.realizada or realizada_na_tela
+        aula.save(update_fields=['realizada'])
 
-    # Ligar ou desligar muda o que conta, então devolve as faltas e a frequência de cada aluno da turma.
-    matriculas = list(Matricula.objects.filter(turma_id=aula.turma_id, ativo=True))
-    faltas_por_matricula = _faltas_por_matricula(matriculas)
-    total_periodos = aula.turma.disciplina.total_periodos
-    alunos = {}
-    for matricula in matriculas:
-        faltas = faltas_por_matricula.get(matricula.id, 0)
-        alunos[matricula.id] = {
-            'faltas': faltas,
-            'frequencia': calcular_frequencia(total_periodos, faltas),
-        }
+        # Com a aula não realizada na tela as células ficam travadas e as faltas guardadas não mudam,
+        # mesmo que outra aba já tenha salvo a aula como realizada.
+        if realizada_na_tela:
+            faltas = {(falta.matricula_id, falta.periodo): falta for falta in Falta.objects.filter(aula=aula)}
+            for matricula in Matricula.objects.filter(turma_id=aula.turma_id, ativo=True):
+                for periodo in range(1, aula.periodos + 1):
+                    estado = request.POST.get(f'periodo_{matricula.id}_{periodo}')
+                    # Período que não veio no envio fica como está.
+                    if estado not in ESTADOS_DO_PERIODO:
+                        continue
+                    falta = faltas.get((matricula.id, periodo))
+                    if estado == 'P':
+                        if falta:
+                            falta.delete()
+                    elif falta is None:
+                        Falta.objects.create(aula=aula, matricula=matricula, periodo=periodo, justificada=estado == 'J')
+                    elif falta.justificada != (estado == 'J'):
+                        falta.justificada = estado == 'J'
+                        falta.save(update_fields=['justificada'])
 
-    return JsonResponse({
-        'ok': True,
-        'realizada': aula.realizada,
-        'alunos': alunos,
-    })
-
-@require_POST
-@_exige_professor
-def marcar_falta_ajax(request):
-    aula = _aula_do_professor(request.POST.get('aula'), request.user)
-    if not aula:
-        return JsonResponse({'ok': False, 'erro': 'Aula não encontrada.'})
-
-    # Com "Aula realizada" desligada as células ficam travadas.
-    if not aula.realizada:
-        return JsonResponse({'ok': False, 'erro': 'Ligue "Aula realizada" antes de marcar presença ou falta.'})
-
-    matricula_id = _inteiro(request.POST.get('matricula'))
-    matricula = Matricula.objects.filter(
-        id=matricula_id, turma_id=aula.turma_id, ativo=True
-    ).first() if matricula_id is not None else None
-    if not matricula:
-        return JsonResponse({'ok': False, 'erro': 'Aluno não encontrado nessa turma.'})
-
-    periodo = _inteiro(request.POST.get('periodo'))
-    if periodo is None or not 1 <= periodo <= aula.periodos:
-        return JsonResponse({'ok': False, 'erro': 'Período inválido.'})
-
-    # A célula manda o estado desejado (falta=1 ou 0), então repetir o envio não inverte de novo.
-    falta = request.POST.get('falta') == '1'
-    if falta:
-        Falta.objects.get_or_create(aula=aula, matricula=matricula, periodo=periodo)
-    else:
-        Falta.objects.filter(aula=aula, matricula=matricula, periodo=periodo).delete()
-
-    faltas = _faltas_por_matricula([matricula]).get(matricula.id, 0)
-    return JsonResponse({
-        'ok': True,
-        'falta': falta,
-        'faltas': faltas,
-        'frequencia': calcular_frequencia(aula.turma.disciplina.total_periodos, faltas),
-    })
+    # A tela recarrega depois da resposta e mostra a mensagem, como nos outros botões Salvar.
+    messages.success(request, 'Diário salvo com sucesso!')
+    return JsonResponse({'ok': True})
 
 def gerar_relatorio(request):
     response = HttpResponse(content_type='application/pdf')
@@ -963,7 +1185,10 @@ def gerar_relatorio(request):
     width, height = A4
     c = canvas.Canvas(response, pagesize=A4)
 
-    ano = request.session.get('boletim_ano', str(datetime.now().year))
+    # O ano vem do link de Download, o mesmo que está na tela; sem ele, o guardado na sessão.
+    ano = request.GET.get('ano', '')
+    if not ano.isdigit():
+        ano = request.session.get('boletim_ano', str(datetime.now().year))
 
     turma_aluno = Turma.objects.filter(
         matricula__aluno=request.user, matricula__ativo=True, ano=ano
@@ -990,13 +1215,19 @@ def gerar_relatorio(request):
 
     # Linhas de notas
     notas = _notas_do_aluno(request.user, ano)
+    turmas_sem_nota = _turmas_sem_nota(request.user, ano)
     y -= 25
     c.setFont("Helvetica", 10)
 
-    for nota in notas:
-        c.drawString(72,  y, str(nota.disciplina))
-        c.drawString(370, y, str(nota.media_final if nota.media_final is not None else '-'))
-        c.drawString(430, y, nota.get_situacao_display())
+    linhas = [
+        (nota.disciplina, nota.media_final if nota.media_final is not None else '-', nota.get_situacao_display())
+        for nota in notas
+    ] + [(turma.disciplina, '-', 'Cursando') for turma in turmas_sem_nota]
+
+    for disciplina, media, situacao in linhas:
+        c.drawString(72,  y, str(disciplina))
+        c.drawString(370, y, str(media))
+        c.drawString(430, y, situacao)
         y -= 20
 
         if y < 72:
@@ -1004,7 +1235,7 @@ def gerar_relatorio(request):
             y = height - 72
 
     # Situação Final
-    total_cursando = notas.filter(situacao='cursando').count()
+    total_cursando = notas.filter(situacao='cursando').count() + len(turmas_sem_nota)
     total_reprovadas = notas.filter(situacao='reprovado').count()
     total_aprovadas = notas.filter(situacao='aprovado').count()
     total_exame = notas.filter(situacao='exame').count()
@@ -1036,8 +1267,13 @@ def gerar_relatorio(request):
 ESCALA_TOTAL = 10
 
 def _turmas_dashboard():
-    """Turmas ativas de disciplinas ativas."""
-    return Turma.objects.filter(ativo=True, disciplina__ativo=True)
+    """
+    Turmas ativas de disciplinas ativas que têm avaliação. Disciplina sem avaliação fica de fora,
+    como no boletim do aluno e nas telas do professor: não há nota para lançar nem situação para contar.
+    """
+    return Turma.objects.filter(
+        ativo=True, disciplina__ativo=True, disciplina__in=Disciplina.objects.filter(avaliacao__isnull=False)
+    )
 
 def _ano_dashboard(request, turmas):
     """Anos letivos que têm turma e o ano escolhido em ?ano= (padrão: o ano atual, senão o mais recente)."""
@@ -1188,17 +1424,16 @@ def gestao_disciplinas(request):
         request.session.pop('filtro_gestao_disciplina', None)
         return redirect('gestao-disciplinas')
 
-    # 3. Lê o que foi escolhido nos dropdowns
-    professor_id  = request.POST.get('professor', '')
-    disciplina_id = request.POST.get('disciplina', '')
-
-    # 4. Memória: se clicou em Filtrar (POST) anota na sessão; se só abriu a página (GET) relembra
+    # 3. Memória: se clicou em Filtrar (POST) anota na sessão o que foi escolhido nos dropdowns e volta por GET
     if request.method == 'POST':
-        request.session['filtro_gestao_professor'] = professor_id
-        request.session['filtro_gestao_disciplina'] = disciplina_id
-    else:
-        professor_id  = request.session.get('filtro_gestao_professor', '')
-        disciplina_id = request.session.get('filtro_gestao_disciplina', '')
+        request.session['filtro_gestao_professor'] = request.POST.get('professor', '')
+        request.session['filtro_gestao_disciplina'] = request.POST.get('disciplina', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('gestao-disciplinas')
+
+    # 4. Ao abrir a página (GET) relembra o filtro
+    professor_id  = request.session.get('filtro_gestao_professor', '')
+    disciplina_id = request.session.get('filtro_gestao_disciplina', '')
 
     # 5. Aplica os filtros escolhidos
     if professor_id:
@@ -1312,15 +1547,14 @@ def gestao_turmas(request):
         request.session.pop('filtro_gestao_turma_nome', None)
         return redirect('gestao-turmas')
 
-    disciplina_id = request.POST.get('disciplina', '')
-    turma_nome    = request.POST.get('turma', '')
-
     if request.method == 'POST':
-        request.session['filtro_gestao_turma_disciplina'] = disciplina_id
-        request.session['filtro_gestao_turma_nome'] = turma_nome
-    else:
-        disciplina_id = request.session.get('filtro_gestao_turma_disciplina', '')
-        turma_nome    = request.session.get('filtro_gestao_turma_nome', '')
+        request.session['filtro_gestao_turma_disciplina'] = request.POST.get('disciplina', '')
+        request.session['filtro_gestao_turma_nome'] = request.POST.get('turma', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('gestao-turmas')
+
+    disciplina_id = request.session.get('filtro_gestao_turma_disciplina', '')
+    turma_nome    = request.session.get('filtro_gestao_turma_nome', '')
 
     if disciplina_id:
         turmas = turmas.filter(disciplina_id=disciplina_id)
@@ -1628,15 +1862,14 @@ def gestao_matriculas(request):
         request.session.pop('filtro_gestao_mat_aluno', None)
         return redirect('gestao-matriculas')
 
-    turma_nome = request.POST.get('turma', '')
-    aluno_id = request.POST.get('aluno', '')
-
     if request.method == 'POST':
-        request.session['filtro_gestao_mat_turma'] = turma_nome
-        request.session['filtro_gestao_mat_aluno'] = aluno_id
-    else:
-        turma_nome = request.session.get('filtro_gestao_mat_turma', '')
-        aluno_id = request.session.get('filtro_gestao_mat_aluno', '')
+        request.session['filtro_gestao_mat_turma'] = request.POST.get('turma', '')
+        request.session['filtro_gestao_mat_aluno'] = request.POST.get('aluno', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('gestao-matriculas')
+
+    turma_nome = request.session.get('filtro_gestao_mat_turma', '')
+    aluno_id = request.session.get('filtro_gestao_mat_aluno', '')
 
     # O filtro de turma é pelo nome da turma ("3A"), não por turma + disciplina
     todas_turmas = sorted(set(Turma.objects.filter(ativo=True).values_list('nome', flat=True)))
@@ -1680,12 +1913,12 @@ def gestao_usuarios(request):
         request.session.pop('filtro_gestao_usuario_grupo', None)
         return redirect('gestao-usuarios')
 
-    grupo_nome = request.POST.get('grupo', '')
-
     if request.method == 'POST':
-        request.session['filtro_gestao_usuario_grupo'] = grupo_nome
-    else:
-        grupo_nome = request.session.get('filtro_gestao_usuario_grupo', '')
+        request.session['filtro_gestao_usuario_grupo'] = request.POST.get('grupo', '')
+        # Volta por GET: atualizar a página depois não reenvia o formulário, e a seta voltar do navegador reabre o filtro.
+        return redirect('gestao-usuarios')
+
+    grupo_nome = request.session.get('filtro_gestao_usuario_grupo', '')
 
     if grupo_nome:
         usuarios = usuarios.filter(groups__name=grupo_nome)

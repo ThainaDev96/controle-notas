@@ -113,6 +113,8 @@ Para simular os registros, foi criado uma função que lê os dados de um arquiv
 ```
 docker compose exec web python manage.py popular_dados
 ```
+O comando distribui 100 alunos em 5 turmas de 20 (1A, 1B, 2A, 2B e 3A) e divide as situações das notas por turma e modo de cálculo. No banco local ele também tira o excesso: apaga os outros alunos do CSV, as turmas fora dessa lista e as matrículas, notas e faltas de antes. As aulas das turmas que ficam continuam. Rodar de novo volta as turmas, os alunos e as notas ao ponto inicial. A senha de teste fica em `SENHA_TESTE`, no próprio comando.
+
 ## Backup do banco de dados
 
 ```

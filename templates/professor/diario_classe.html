@@ -147,7 +147,7 @@
                     </div>
 
                     <label class="dc-interruptor">
-                        <input type="checkbox" id="dc-aula-realizada" role="switch" autocomplete="off" {% if aula.realizada %}checked{% endif %}>
+                        <input type="checkbox" id="dc-aula-realizada" role="switch" autocomplete="off" {% if aula.realizada %}checked disabled{% endif %}>
                         <span class="dc-interruptor__trilho" aria-hidden="true"></span>
                         <span>Aula realizada</span>
                     </label>
@@ -179,13 +179,14 @@
                                         <div class="dc-periodos">
                                             {% for periodo in linha.periodos %}
                                                 <button type="button"
-                                                    class="dc-periodo{% if periodo.falta %} dc-periodo--falta{% endif %}"
+                                                    class="dc-periodo{% if periodo.estado == 'F' %} dc-periodo--falta{% elif periodo.estado == 'J' %} dc-periodo--justificada{% endif %}"
                                                     data-periodo="{{ periodo.numero }}"
-                                                    data-falta="{% if periodo.falta %}1{% else %}0{% endif %}"
+                                                    data-estado="{{ periodo.estado }}"
+                                                    data-inicial="{{ periodo.estado }}"
                                                     data-aluno="{{ linha.aluno.first_name }}"
                                                     {% if not aula.realizada %}disabled{% endif %}
-                                                    aria-label="{{ linha.aluno.first_name }}, período {{ periodo.numero }}: {% if not aula.realizada %}aula não realizada{% elif periodo.falta %}falta{% else %}presente{% endif %}">
-                                                    {% if not aula.realizada %}–{% elif periodo.falta %}F{% else %}P{% endif %}
+                                                    aria-label="{{ linha.aluno.first_name }}, período {{ periodo.numero }}: {% if not aula.realizada %}aula não realizada{% elif periodo.estado == 'F' %}falta{% elif periodo.estado == 'J' %}falta justificada{% else %}presente{% endif %}">
+                                                    {% if not aula.realizada %}–{% else %}{{ periodo.estado }}{% endif %}
                                                 </button>
                                             {% endfor %}
                                         </div>
@@ -207,6 +208,7 @@
                 <div class="dc-legenda">
                     <span class="dc-legenda__item"><span class="dc-marca" aria-hidden="true">P</span> Presente</span>
                     <span class="dc-legenda__item"><span class="dc-marca dc-marca--falta" aria-hidden="true">F</span> Falta</span>
+                    <span class="dc-legenda__item"><span class="dc-marca dc-marca--justificada" aria-hidden="true">J</span> Falta justificada</span>
                     <span class="dc-legenda__item"><span class="dc-marca dc-marca--nao-realizada" aria-hidden="true"></span> Aula não realizada</span>
                     <span class="dc-legenda__base">
                         {% if total_periodos %}
@@ -217,6 +219,12 @@
                     </span>
                 </div>
 
+                <!-- BOTÕES -->
+                <div>
+                    <button type="button" id="dc-salvar" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"
+                        data-nome="o diário de {{ data|date:'d/m/Y' }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
+                </div>
+
                 {% endif %}
             </div>
 
@@ -225,6 +233,7 @@
 </div>
 
 </div>
+{% if aula %}{% include "partials/modal-confirmar-salvar.html" %}{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -253,14 +262,15 @@ $(document).ready(function () {
     var aulaId = '{{ aula.id }}';
     var erroPadrao = 'Não foi possível salvar. Recarregue a página e tente de novo.';
     var $chave = $('#dc-aula-realizada');
-    // Estado da aula já confirmado pelo servidor, e se o interruptor está salvando
-    var aulaRealizada = {{ aula.realizada|yesno:'true,false' }};
-    var salvandoAula = false;
-    // Faltas ainda sendo salvas. O interruptor só é salvo depois delas, para as respostas não se cruzarem.
-    var faltasSalvando = 0;
-    var aulaEsperando = false;
+    // Estado do interruptor na tela; só vai para o banco no Salvar
+    var aulaRealizada = $chave.is(':checked');
+    // Mudança feita na tela e ainda não salva
+    var alterado = false;
     // Frequência de cada quantidade de faltas, já calculada no servidor pela função única
     var frequencias = JSON.parse(document.getElementById('dc-frequencias').textContent);
+    // Cada clique passa para o próximo estado: presente, falta, falta justificada e de novo presente
+    var ESTADOS = ['P', 'F', 'J'];
+    var DESCRICAO = { P: 'presente', F: 'falta', J: 'falta justificada' };
 
     // Ícone de calendário: abre o seletor de data do navegador; escolher uma data abre aquela aula.
     var calendario = document.getElementById('dc-calendario');
@@ -280,15 +290,16 @@ $(document).ready(function () {
         }
     });
 
-    // Mostra a célula conforme o estado: cinza e travada com a aula não realizada; senão P ou F.
+    // Mostra a célula conforme o estado: cinza e travada com a aula não realizada; senão P, F ou J.
     function pintarCelula($celula, realizada) {
-        var falta = $celula.attr('data-falta') === '1';
-        var estado = !realizada ? 'aula não realizada' : (falta ? 'falta' : 'presente');
+        var estado = $celula.attr('data-estado');
         $celula
             .prop('disabled', !realizada)
-            .toggleClass('dc-periodo--falta', falta)
-            .text(!realizada ? '–' : (falta ? 'F' : 'P'))
-            .attr('aria-label', $celula.attr('data-aluno') + ', período ' + $celula.attr('data-periodo') + ': ' + estado);
+            .toggleClass('dc-periodo--falta', estado === 'F')
+            .toggleClass('dc-periodo--justificada', estado === 'J')
+            .text(!realizada ? '–' : estado)
+            .attr('aria-label', $celula.attr('data-aluno') + ', período ' + $celula.attr('data-periodo') + ': ' +
+                (!realizada ? 'aula não realizada' : DESCRICAO[estado]));
     }
 
     function mostrarTotais($linha, faltas, frequencia) {
@@ -296,122 +307,95 @@ $(document).ready(function () {
         $linha.find('.dc-col-frequencia').text(frequencia);
     }
 
-    // Soma ou tira faltas da linha na hora do clique, sem esperar o servidor. Se a quantidade
-    // não estiver entre as frequências calculadas, a frequência espera a resposta do servidor.
+    // Soma ou tira faltas da linha na hora do clique. Se a quantidade não estiver entre as
+    // frequências calculadas, a frequência fica como está até salvar.
     function somarFaltas($linha, quantidade) {
         var faltas = parseInt($linha.find('.dc-col-faltas').text(), 10) + quantidade;
         var frequencia = frequencias[faltas];
         mostrarTotais($linha, faltas, frequencia === undefined ? $linha.find('.dc-col-frequencia').text() : frequencia);
     }
 
-    function salvarAula() {
-        var realizada = $chave.is(':checked');
-        if (realizada === aulaRealizada) {
-            $chave.prop('disabled', false);
-            return;
-        }
-        salvandoAula = true;
-        $chave.prop('disabled', true);
-
-        $.post("{% url 'aula-realizada-ajax' %}", {
-            aula: aulaId,
-            realizada: realizada ? '1' : '0',
-            csrfmiddlewaretoken: '{{ csrf_token }}'
-        }).done(function (resp) {
-            if (resp && resp.ok) {
-                aulaRealizada = resp.realizada;
-                $('.dc-periodo').each(function () {
-                    pintarCelula($(this), aulaRealizada);
-                });
-                $('#TabelaDiario tbody tr[data-matricula]').each(function () {
-                    var aluno = resp.alunos[$(this).attr('data-matricula')];
-                    if (aluno) {
-                        mostrarTotais($(this), aluno.faltas, aluno.frequencia);
-                    }
-                });
-            } else {
-                $chave.prop('checked', aulaRealizada);
-                alert((resp && resp.erro) || erroPadrao);
-            }
-        }).fail(function () {
-            $chave.prop('checked', aulaRealizada);
-            alert(erroPadrao);
-        }).always(function () {
-            salvandoAula = false;
-            $chave.prop('disabled', false);
-        });
+    // A falta justificada conta na frequência como a falta.
+    function contaFalta(estado) {
+        return estado === 'P' ? 0 : 1;
     }
 
+    // Ligar ou desligar a aula na tela muda o que conta: as marcas dessa aula entram ou saem das faltas.
     $chave.on('change', function () {
-        // Com falta ainda sendo salva, o interruptor fica travado e é salvo quando a última resposta chegar
-        if (faltasSalvando > 0) {
-            aulaEsperando = true;
-            $chave.prop('disabled', true);
-            return;
-        }
-        salvarAula();
+        aulaRealizada = $chave.is(':checked');
+        alterado = true;
+        $('#TabelaDiario tbody tr[data-matricula]').each(function () {
+            var $linha = $(this);
+            var marcas = 0;
+            $linha.find('.dc-periodo').each(function () {
+                pintarCelula($(this), aulaRealizada);
+                marcas += contaFalta($(this).attr('data-estado'));
+            });
+            somarFaltas($linha, aulaRealizada ? marcas : -marcas);
+        });
     });
 
-    // Sair da página antes de o interruptor ser enviado perderia a mudança: o navegador pede confirmação
+    // Sair da página com mudança ainda não salva: o navegador pede confirmação
     window.addEventListener('beforeunload', function (evento) {
-        if (aulaEsperando) {
+        if (alterado) {
             evento.preventDefault();
             evento.returnValue = '';
         }
     });
 
-    // Clicar alterna P e F: a célula, as faltas e a frequência mudam na hora e a falta é salva
-    // em seguida (cria ou apaga a Falta). Se o servidor recusar, tudo volta como estava.
+    // Clicar muda a célula, as faltas e a frequência na hora; nada vai para o banco antes do Salvar.
     $('#TabelaDiario').on('click', '.dc-periodo', function () {
         var $celula = $(this);
-        // Enquanto o interruptor espera para salvar ou está salvando, as células não mudam
-        if (!aulaRealizada || salvandoAula || aulaEsperando || $celula.prop('disabled') || $celula.attr('aria-busy') === 'true') {
+        if (!aulaRealizada || $celula.prop('disabled')) {
             return;
         }
-
-        var $linha = $celula.closest('tr');
-        var faltaAntes = $celula.attr('data-falta');
-        var faltaNova = faltaAntes === '1' ? '0' : '1';
-        var quantidade = faltaNova === '1' ? 1 : -1;
-
-        $celula.attr('data-falta', faltaNova).attr('aria-busy', 'true');
+        var antes = $celula.attr('data-estado');
+        var depois = ESTADOS[(ESTADOS.indexOf(antes) + 1) % ESTADOS.length];
+        $celula.attr('data-estado', depois);
         pintarCelula($celula, true);
-        somarFaltas($linha, quantidade);
-        faltasSalvando += 1;
-        $linha.attr('data-salvando', (parseInt($linha.attr('data-salvando'), 10) || 0) + 1);
+        somarFaltas($celula.closest('tr'), contaFalta(depois) - contaFalta(antes));
+        alterado = true;
+    });
 
-        function desfazer(mensagem) {
-            $celula.attr('data-falta', faltaAntes);
-            pintarCelula($celula, aulaRealizada);
-            somarFaltas($linha, -quantidade);
-            alert(mensagem);
-        }
+    // Salvar abre a confirmação; o "Sim, salvar" grava a aula e as células que mudaram, de uma vez.
+    $('#dc-salvar').on('click', function () {
+        $('#nome-item-salvar').text($(this).data('nome'));
+        $('#modalSalvar').modal('show');
+    });
 
-        $.post("{% url 'marcar-falta-ajax' %}", {
+    $('#btn-confirmar-salvar').on('click', function () {
+        var $botao = $(this);
+        var dados = {
             aula: aulaId,
-            matricula: $linha.attr('data-matricula'),
-            periodo: $celula.attr('data-periodo'),
-            falta: faltaNova,
+            realizada: aulaRealizada ? '1' : '0',
             csrfmiddlewaretoken: '{{ csrf_token }}'
-        }).done(function (resp) {
-            if (resp && resp.ok) {
-                // Com vários cliques na mesma linha, o número do servidor só entra com a última resposta
-                if ($linha.attr('data-salvando') === '1') {
-                    mostrarTotais($linha, resp.faltas, resp.frequencia);
+        };
+        // Só vão as células que mudaram nesta tela: as outras ficam como estão no banco, mesmo que
+        // tenham sido salvas por outra aba depois que esta página abriu.
+        $('#TabelaDiario tbody tr[data-matricula]').each(function () {
+            var matricula = $(this).attr('data-matricula');
+            $(this).find('.dc-periodo').each(function () {
+                if ($(this).attr('data-estado') !== $(this).attr('data-inicial')) {
+                    dados['periodo_' + matricula + '_' + $(this).attr('data-periodo')] = $(this).attr('data-estado');
                 }
+            });
+        });
+
+        $botao.prop('disabled', true);
+        $.post("{% url 'salvar-diario-ajax' %}", dados).done(function (resp) {
+            if (resp && resp.ok) {
+                // Recarrega a mesma data: a tela volta com o que ficou gravado e a mensagem de sucesso.
+                alterado = false;
+                window.location.href = "{% url 'diario-classe' %}?data={{ data|date:'Y-m-d' }}";
             } else {
-                desfazer((resp && resp.erro) || erroPadrao);
+                $('#modalSalvar').modal('hide');
+                $botao.prop('disabled', false);
+                alert((resp && resp.erro) || erroPadrao);
             }
         }).fail(function () {
-            desfazer(erroPadrao);
-        }).always(function () {
-            $celula.removeAttr('aria-busy');
-            $linha.attr('data-salvando', parseInt($linha.attr('data-salvando'), 10) - 1);
-            faltasSalvando -= 1;
-            if (faltasSalvando === 0 && aulaEsperando) {
-                aulaEsperando = false;
-                salvarAula();
-            }
+            $('#modalSalvar').modal('hide');
+            $botao.prop('disabled', false);
+            alert(erroPadrao);
         });
     });
     {% endif %}
