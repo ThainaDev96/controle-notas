@@ -16,7 +16,7 @@
 .diario-classe {
     --da-azul: #03458F;
     --da-azul-claro: #C4D0E9;
-    --da-vermelho: #B4244A;
+    --da-vermelho: #E3172A;
     --dc-cinza-fundo: #F0F0F0;
     --dc-cinza-texto: #6c757d;
 }
@@ -43,14 +43,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 44px;
-    width: 44px;
-    height: 44px;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     color: var(--da-azul);
-    background: #FFFFFF;
-    border: 1px solid var(--da-azul-claro);
-    border-radius: 8px;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
     cursor: pointer;
     transition: background-color .15s ease;
 }
@@ -61,13 +61,13 @@
 }
 
 .diario-classe .dc-botao i {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 /* Campo de data do navegador: fica invisível embaixo do ícone de calendário, que é quem o abre */
 .diario-classe .dc-calendario {
     position: absolute;
-    left: 52px;
+    left: 36px;
     bottom: 0;
     width: 1px;
     height: 1px;
@@ -77,24 +77,40 @@
     pointer-events: none;
 }
 
-/* Data grande e, embaixo, o dia da semana em cinza */
+/* Data e dia da semana na mesma linha, no tamanho do texto da tela */
+.diario-classe .dc-data {
+    gap: 4px;
+}
+
 .diario-classe .dc-data__texto {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 140px;
-    margin: 0 8px;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 6px;
     line-height: 1.2;
 }
 
 .diario-classe .dc-data__dia {
-    font-size: 26px;
+    font-size: 16px;
     color: #333333;
 }
 
 .diario-classe .dc-data__semana {
     font-size: 13px;
     color: var(--dc-cinza-texto);
+}
+
+/* ---------- Como marcar as faltas ---------- */
+
+.diario-classe .dc-ajuda {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--dc-cinza-texto);
+}
+
+.diario-classe .dc-ajuda i {
+    margin-right: 4px;
+    color: var(--da-azul);
 }
 
 /* ---------- Interruptor "Aula realizada" ---------- */
@@ -216,6 +232,22 @@
     outline-offset: 2px;
 }
 
+/* ---------- Frequência abaixo da mínima ---------- */
+
+.diario-classe .dc-freq-aviso {
+    display: none;
+    font-size: 12px;
+    color: var(--da-vermelho);
+}
+
+.diario-classe .dc-col-frequencia--reprovado .dc-freq-valor {
+    color: var(--da-vermelho);
+}
+
+.diario-classe .dc-col-frequencia--reprovado .dc-freq-aviso {
+    display: block;
+}
+
 /* ---------- Legenda ---------- */
 
 .diario-classe .dc-legenda {
@@ -283,8 +315,6 @@
     .diario-classe .dc-data__texto {
         order: -1;
         flex: 0 0 100%;
-        align-items: flex-start;
-        min-width: 0;
         margin: 0 0 4px;
     }
 }

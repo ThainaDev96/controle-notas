@@ -1,7 +1,7 @@
 {% extends 'base_sistema.html' %}
 {% load static %}
 
-{% block title %}Lista de Notas{% endblock %}
+{% block title %}Lista de notas{% endblock %}
 {% block nav_lista_notas %}active{% endblock %}
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
 
@@ -94,7 +94,7 @@
     font-weight: 600;
 }
 .nota-reprovado {
-    color: #dc3545;
+    color: #E3172A;
     font-weight: 600;
 }
 .nota-cursando {
@@ -120,7 +120,7 @@
 }
 .badge-reprovado {
     background-color: #f8d7da;
-    color: #dc3545;
+    color: #E3172A;
 }
 .badge-cursando {
     background-color: #fff3cd;
@@ -147,7 +147,7 @@
 }
 .dot-aprovado    { background-color: #28a745; }
 .dot-recuperacao { background-color: #fd7e14; }
-.dot-reprovado   { background-color: #dc3545; }
+.dot-reprovado   { background-color: #E3172A; }
 .dot-cursando { background-color: #d4a000; }
 
 .card-header-boletim {
@@ -172,10 +172,10 @@
 .sf-sep { color: #ccc; margin: 0 2px; }
 .sf-aprovado    { color: #28a745; font-weight: 600; }
 .sf-recuperacao { color: #e07b00; font-weight: 600; }
-.sf-reprovado   { color: #dc3545; font-weight: 600; }
+.sf-reprovado   { color: #E3172A; font-weight: 600; }
 .sf-cursando { color: #f5c400; font-weight: 600; }
 .sf-status-aprovado  { color: #28a745; font-weight: 700; }
-.sf-status-reprovado { color: #dc3545; font-weight: 700; }
+.sf-status-reprovado { color: #E3172A; font-weight: 700; }
 .sf-status-andamento { color: #856404; font-weight: 700; }
 
 .header-left {
@@ -264,7 +264,7 @@
         <div class="col-lg-8">
             <div class="page-header-title">
                 <div class="d-inline">
-                    <h4>Lista de Notas</h4>
+                    <h4>Lista de notas</h4>
                 </div>
             </div>
         </div>
@@ -302,8 +302,6 @@
             </div>
         </div>
         <!-- FIM CARD DE FILTROS -->
-
-        {% include "partials/caixa-regra-aprovacao.html" %}
 
         <div class="card">
             <div class="card-header">
@@ -383,7 +381,7 @@
             <!-- Situação Final -->
             {% if notas or turmas_sem_nota %}
             <div class="sf-row">
-                <span class="sf-label">Situação Final:</span>
+                <span class="sf-label">Situação final:</span>
                 {% if situacao_final == 'aprovado' %}
                     <span class="sf-status-aprovado">Aprovado de ano</span>
                 {% elif situacao_final == 'reprovado' %}
@@ -411,22 +409,6 @@
             </div>
         </div>
 
-        {% if resumos_calculo %}
-        <!-- RESUMO DO CÁLCULO -->
-        <div class="card card-resumo-calculo">
-            <div class="card-header">
-                <h5 class="mb-0">Resumo do cálculo</h5>
-            </div>
-            <div class="card-block">
-                {% for resumo in resumos_calculo %}
-                <div class="resumo-disciplina">
-                    <p class="resumo-disciplina-nome mb-1">{{ resumo.disciplina_nome }}</p>
-                    <div class="formula-exemplo">{{ resumo.formula_texto }}</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

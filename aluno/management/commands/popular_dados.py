@@ -1,7 +1,8 @@
 """
-Popula o banco com dados de teste: 5 turmas de 20 alunos, os mesmos em todas as
+Popula o banco com dados de teste: 5 turmas de 8 alunos, os mesmos em todas as
 disciplinas, com as situações de notas divididas por turma e modo de cálculo
-(ver SITUACOES_TURMA). Cada aluno fica em uma turma só.
+(ver SITUACOES_TURMA). Cada aluno fica em uma turma só. Além deles ficam 10 alunos
+sem turma, para testar o cadastro de matrícula.
 
 Rodar de novo dá sempre o mesmo resultado, então também serve para voltar as
 turmas, os alunos e as notas ao ponto inicial depois de testar.
@@ -36,7 +37,14 @@ HOST_BANCO_LOCAL = "db"
 SEMENTE_SORTEIO = 2026
 
 NOMES_TURMA = ["1A", "1B", "2A", "2B", "3A"]
-ALUNOS_POR_TURMA = 20
+# Poucos alunos de propósito: a lista de matrículas do administrador fica leve, e ainda
+# sobram no CSV alunos sem matrícula para cadastrar à mão nos testes.
+ALUNOS_POR_TURMA = 8
+# Alunos cadastrados e sem matrícula nenhuma, para testar o cadastro de matrícula pela tela.
+ALUNOS_SEM_TURMA = 10
+
+# Total de períodos da disciplina sem esse número: é obrigatório no cadastro e é a base da frequência.
+TOTAL_PERIODOS = 72
 
 SEM_NOTA, PARCIAL, TUDO = "sem_nota", "parcial", "tudo"
 
@@ -50,7 +58,7 @@ SITUACOES_TURMA = {
     "3A": {"ponderada": TUDO, "soma": TUDO, "aritmetica": TUDO},
 }
 
-# Cada aluno tem um perfil pela posição na turma, com 5 alunos em cada um.
+# Cada aluno tem um perfil pela posição na turma, com 2 alunos em cada um.
 QTD_PERFIS = 4
 APROVADO, EXAME, REPROVA_POUCO, REPROVA_TUDO = range(QTD_PERFIS)
 
@@ -137,7 +145,7 @@ CONFIG_AVALIACOES = {
 
 
 class Command(BaseCommand):
-    help = "Popula o banco com dados de teste: 5 turmas de 20 alunos, com as situações de notas divididas por turma"
+    help = "Popula o banco com dados de teste: 5 turmas de 8 alunos, com as situações de notas divididas por turma"
 
     def handle(self, *args, **kwargs):
         self.banco_local = connection.settings_dict['HOST'] == HOST_BANCO_LOCAL
@@ -174,9 +182,11 @@ class Command(BaseCommand):
             linhas = list(csv.DictReader(file))
 
         self.sorteio.shuffle(linhas)
-        quantidade = len(NOMES_TURMA) * ALUNOS_POR_TURMA
+        com_turma = len(NOMES_TURMA) * ALUNOS_POR_TURMA
+        quantidade = com_turma + ALUNOS_SEM_TURMA
 
-        self.alunos = []
+        # Os primeiros vão para as turmas; os seguintes ficam cadastrados, sem turma.
+        cadastrados = []
         for row in linhas[:quantidade]:
             user, criado = User.objects.get_or_create(
                 username=row['matricula'],
@@ -188,7 +198,9 @@ class Command(BaseCommand):
             user.is_active = True
             user.save()
             user.groups.set([grupo_aluno])
-            self.alunos.append(user)
+            cadastrados.append(user)
+        self.alunos = cadastrados[:com_turma]
+        self.alunos_sem_turma = cadastrados[com_turma:]
 
         # Os alunos do CSV que sobram são o excesso. Quem também é professor ou
         # administrador fica, porque a disciplina do professor seria apagada junto.
@@ -199,7 +211,7 @@ class Command(BaseCommand):
         ).exclude(groups__name__in=("professor", "administrador")).delete()
 
         if self.banco_local:
-            User.objects.filter(id__in=[aluno.id for aluno in self.alunos]).update(
+            User.objects.filter(id__in=[aluno.id for aluno in cadastrados]).update(
                 password=make_password(SENHA_TESTE)
             )
 
@@ -260,6 +272,9 @@ class Command(BaseCommand):
                     disciplina = Disciplina(nome=nome, professor=professor)
                 disciplina.modo_calculo = modo
                 disciplina.ativo = True
+                # Quem já tem o total informado pela tela continua com ele.
+                if not disciplina.total_periodos:
+                    disciplina.total_periodos = TOTAL_PERIODOS
                 disciplina.save()
                 self.disciplinas.append(disciplina)
 
@@ -363,7 +378,7 @@ class Command(BaseCommand):
             return []
         if situacao == TUDO:
             return avaliacoes
-        # Parcial, na mesma turma: 5 sem nada, 5 com a primeira, 5 só sem a última e 5 com tudo.
+        # Parcial, na mesma turma: 2 sem nada, 2 com a primeira, 2 só sem a última e 2 com tudo.
         return [[], avaliacoes[:1], avaliacoes[:-1], avaliacoes][posicao % QTD_PERFIS]
 
     def media_fronteira(self, turma, posicao):
@@ -433,5 +448,7 @@ class Command(BaseCommand):
             # Os 4 primeiros alunos da turma têm um perfil cada.
             logins = ', '.join(aluno.username for aluno in self.alunos_por_turma[nome][:QTD_PERFIS])
             self.stdout.write(f"{nome}: {situacoes} | logins: {logins}")
+        sem_turma = ', '.join(aluno.username for aluno in self.alunos_sem_turma)
+        self.stdout.write(f"Sem turma, para testar o cadastro de matrícula: {sem_turma}")
         if self.banco_local:
             self.stdout.write("Senha de teste: veja SENHA_TESTE em aluno/management/commands/popular_dados.py")

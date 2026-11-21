@@ -13,7 +13,7 @@
 .dashboard {
     --da-azul: #03458F;
     --da-azul-claro: #C4D0E9;
-    --da-vermelho: #B4244A;
+    --da-vermelho: #E3172A;
     --da-azul-escuro: #022B59;
     --da-trilho: #E7ECF6;
     --da-cursando: #D4A000;
@@ -279,35 +279,6 @@
 }
 
 /* ---------- Alunos em risco ---------- */
-
-/* Explicação da regra de aprovação, no mesmo estilo da caixa "Regra de aprovação" das outras telas */
-.dashboard .da-explicacao {
-    margin-bottom: 16px;
-    padding: 12px 15px;
-    border: 1px solid #e0e6ed;
-    border-radius: 4px;
-}
-
-.dashboard .da-explicacao__titulo {
-    margin-bottom: 6px;
-    font-weight: 500;
-    color: var(--da-azul);
-}
-
-/* Regra em tópicos, como a lista da caixa "Regra de aprovação" */
-.dashboard .da-explicacao ul {
-    margin: 0;
-    padding-left: 18px;
-    list-style: disc;
-}
-
-.dashboard .da-explicacao li {
-    margin-bottom: 4px;
-}
-
-.dashboard .da-explicacao li:last-child {
-    margin-bottom: 0;
-}
 
 .dashboard .da-pilula {
     display: inline-block;

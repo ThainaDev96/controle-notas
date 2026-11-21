@@ -7,6 +7,7 @@
         data-turma="{{ turma_id }}"
         data-url-nota="{% url 'editar-nota-avaliacao-ajax' %}"
         data-url-exame="{% url 'lancar-nota-exame-ajax' %}"
+        data-url-salvo="{% url 'cadastrar-notas' %}?salvo=1"
         data-csrf="{{ csrf_token }}">
         <thead>
             <tr>

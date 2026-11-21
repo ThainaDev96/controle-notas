@@ -1,6 +1,7 @@
 // Tabela de notas, a mesma na Lista de Notas (data-modo="editar") e no Cadastro de Notas (data-modo="lancar").
 // Na Lista só as notas lançadas vêm abertas para corrigir, a que for limpa não abre mais e o exame é só para ver.
-// No Cadastro só a célula em branco abre, com duplo clique, e depois de lançada não abre mais.
+// No Cadastro só a célula em branco abre, com duplo clique. A nota digitada fica só na tela, destacada,
+// e vai para o banco no botão Salvar (com a janela de confirmação); depois de salva, a célula não abre mais.
 // Nas duas, Tab e Shift+Tab salvam a célula como ao sair dela e abrem a próxima (ou a anterior) que pode receber nota.
 $(document).ready(function () {
     var $tabela = $('#TabelaNotas');
@@ -12,6 +13,8 @@ $(document).ready(function () {
     var erroPadrao = 'Não foi possível salvar. Recarregue a página e tente de novo.';
     // As notas são enviadas uma de cada vez, para as respostas chegarem na ordem em que foram salvas.
     var fila = $.when();
+    // No Cadastro: notas que não entraram no último Salvar.
+    var falhas = 0;
 
     var tabela = $tabela.DataTable({
         language: {
@@ -37,7 +40,35 @@ $(document).ready(function () {
     });
 
     function abrirCelula($celula) {
-        $celula.addClass('editavel').attr('contenteditable', 'true').data('original', $celula.text().trim());
+        // No Cadastro a célula que abre ainda não tem nota gravada: o que estiver nela foi digitado e não salvo.
+        $celula.addClass('editavel').attr('contenteditable', 'true').data('original', modoLancar ? '' : $celula.text().trim());
+    }
+
+    // Notas digitadas no Cadastro e ainda não salvas, de todas as páginas da tabela.
+    function pendentes() {
+        return tabela.$('td.nota-pendente');
+    }
+
+    function atualizarSalvar() {
+        var quantidade = pendentes().length;
+        $('#tn-salvar').prop('disabled', quantidade === 0);
+        $('#tn-pendentes').text(
+            quantidade === 0 ? '' : quantidade === 1 ? '1 nota ainda não salva' : quantidade + ' notas ainda não salvas'
+        );
+    }
+
+    // No Cadastro, sair da célula só guarda a nota na tela; nota fora de 0 a 10 não fica.
+    function guardarNaTela($celula, valor) {
+        var numero = Number(valor.replace(',', '.'));
+        $celula.removeAttr('contenteditable');
+        if (valor !== '' && !(numero >= 0 && numero <= 10)) {
+            $celula.empty().removeClass('nota-pendente');
+            alert($celula.attr('data-rotulo') + ': a nota deve ser um número entre 0 e 10.');
+        } else {
+            $celula.text(valor).toggleClass('nota-pendente', valor !== '');
+        }
+        tabela.row($celula.closest('tr')).invalidate('dom');
+        atualizarSalvar();
     }
 
     // Células que podem receber nota, na ordem em que a tabela mostra as linhas (com a ordenação e a busca
@@ -78,6 +109,7 @@ $(document).ready(function () {
 
     // A nota não entrou: a célula volta a mostrar o que tinha, sem parecer uma nota salva.
     function naoSalvou($celula, original, mensagem) {
+        falhas += 1;
         $celula.text(original).addClass('editavel');
         if (!modoLancar) {
             abrirCelula($celula);
@@ -168,11 +200,13 @@ $(document).ready(function () {
         var valor = $celula.text().trim();
         var original = $celula.data('original');
 
+        if (modoLancar) {
+            guardarNaTela($celula, valor);
+            return;
+        }
+
         // Sair sem mudar nada não salva nem recalcula.
         if (valor === original) {
-            if (modoLancar) {
-                $celula.removeAttr('contenteditable').empty();
-            }
             return;
         }
 
@@ -183,6 +217,76 @@ $(document).ready(function () {
             return $celula.is('[data-nota]') ? salvarExame($celula, valor, original) : salvarNota($celula, valor, original);
         }
         fila = fila.then(enviar, enviar);
+    });
+
+    // ---------- Cadastro: botão Salvar ----------
+
+    // Sair da página com nota digitada e não salva: o navegador pede confirmação.
+    window.addEventListener('beforeunload', function (evento) {
+        if (modoLancar && pendentes().length) {
+            evento.preventDefault();
+            evento.returnValue = '';
+        }
+    });
+
+    // Com uma nota sendo digitada o Salvar já fica disponível, antes mesmo de sair da célula.
+    $tabela.on('input', 'td[contenteditable="true"]', function () {
+        if (modoLancar) {
+            $('#tn-salvar').prop('disabled', false);
+        }
+    });
+
+    $('#tn-salvar').on('click', function () {
+        // Enter ou Tab já fecharam a célula; se ainda houver uma aberta, ela entra junto.
+        $tabela.find('td[contenteditable="true"]').each(function () {
+            guardarNaTela($(this), $(this).text().trim());
+        });
+        if (!pendentes().length) {
+            atualizarSalvar();
+            return;
+        }
+        $('#nome-item-salvar').text($(this).data('nome'));
+        $('#modalSalvar').modal('show');
+    });
+
+    // "Sim, salvar": manda as notas uma a uma, as das avaliações antes das de exame. Se todas entrarem,
+    // a tela recarrega com a mensagem de sucesso; a que não entrar volta a ficar em branco, com o aviso.
+    $('#btn-confirmar-salvar').on('click', function () {
+        if (!modoLancar) {
+            return;
+        }
+        // Sem nota para gravar não há o que confirmar.
+        if (!pendentes().length) {
+            $('#modalSalvar').modal('hide');
+            return;
+        }
+        var $botao = $(this).prop('disabled', true);
+        falhas = 0;
+
+        pendentes().toArray().sort(function (a, b) {
+            return $(a).is('[data-nota]') - $(b).is('[data-nota]');
+        }).forEach(function (celula) {
+            var $celula = $(celula);
+            var valor = $celula.text().trim();
+            // Enquanto salva, a célula não abre de novo.
+            $celula.removeClass('editavel nota-pendente');
+
+            function enviar() {
+                return $celula.is('[data-nota]') ? salvarExame($celula, valor, '') : salvarNota($celula, valor, '');
+            }
+            fila = fila.then(enviar, enviar);
+        });
+
+        function terminar() {
+            atualizarSalvar();
+            if (falhas === 0) {
+                window.location.href = $tabela.attr('data-url-salvo');
+            } else {
+                $('#modalSalvar').modal('hide');
+                $botao.prop('disabled', false);
+            }
+        }
+        fila = fila.then(terminar, terminar);
     });
 
     $tabela.on('keydown', 'td[contenteditable="true"]', function (evento) {

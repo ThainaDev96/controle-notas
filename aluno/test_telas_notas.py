@@ -174,6 +174,27 @@ class PdfDoBoletimTests(DadosDasTelas):
         self.assertIn('Situação Final: Em andamento', textos)
         self.assertIn('1 aprovadas  ·  0 em exame  ·  0 reprovadas  ·  2 cursando', textos)
 
+    def test_pdf_traz_o_resumo_do_calculo_e_a_regra_de_aprovacao(self):
+        nota = self._nota(self.matematica)
+        prova = Avaliacao.objects.create(nome='Prova do PDF', valor=100, disciplina=self.matematica)
+        NotaAvaliacao.objects.create(nota=nota, avaliacao=prova, nota_obtida=8.0)
+        textos = self._textos_do_pdf()
+        self.assertIn('Resumo do cálculo', textos)
+        self.assertTrue(any('8,0 × 100,0%' in texto for texto in textos), textos)
+        self.assertIn('Regra de aprovação', textos)
+        self.assertIn('Nota final a partir de 7,0: Aprovado', textos)
+        self.assertTrue(any('Frequência abaixo de 75% na disciplina' in texto for texto in textos), textos)
+        # A tela do boletim não mostra mais nenhum dos dois.
+        resposta = self.client.get(reverse('minhas-notas'))
+        self.assertNotContains(resposta, 'Resumo do cálculo')
+        self.assertNotContains(resposta, 'Regra de aprovação')
+        self.assertContains(resposta, 'Download')
+
+    def test_pdf_sem_media_nao_tem_resumo_do_calculo(self):
+        textos = self._textos_do_pdf()
+        self.assertNotIn('Resumo do cálculo', textos)
+        self.assertIn('Regra de aprovação', textos)
+
     def test_disciplina_sem_registro_aparece_como_cursando(self):
         self._nota(self.matematica)
         textos = self._textos_do_pdf()
@@ -420,7 +441,7 @@ class NotaNaoLancadaTests(DadosDasTelas):
         resposta = self.client.post(self.url_edicao, {
             f'nota_avaliacao_{self.prova.id}': '7', f'nota_avaliacao_{self.trabalho.id}': '8',
         }, follow=True)
-        self.assertContains(resposta, 'Cadastro de Notas')
+        self.assertContains(resposta, 'Cadastro de notas')
         self.assertIsNone(self._gravada(self.trabalho))
         self.assertEqual(self._gravada(self.prova), 6.0)
 

@@ -4,7 +4,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from aluno.models import Disciplina, Nota, Turma, Matricula, Avaliacao, NotaAvaliacao, Aula, Falta
 from aluno.calculo_notas import NOTA_MAXIMA, calcular_nota_final, classificar, montar_resumo_formula, calcular_pos_exame, _fmt_pt
-from aluno.calculo_frequencia import calcular_frequencia
+from aluno.grade_horario import DIAS, montar_grade
+from aluno.calculo_frequencia import FREQUENCIA_MINIMA, calcular_frequencia, limite_de_faltas, reprovado_por_falta
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.password_validation import validate_password, password_validators_help_texts
 from django.core.exceptions import ValidationError
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from functools import wraps
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import simpleSplit
 
 def login_view(request):
     if request.method == "POST":
@@ -38,7 +40,8 @@ def login_view(request):
             if "professor" in grupos:
                 return redirect("diario-classe")
 
-            return redirect("minhas-notas")
+            # O aluno cai na grade de horário, que é o que ele consulta no dia a dia; o boletim fica no menu.
+            return redirect("grade-horario")
 
         messages.error(request, "Usuário ou senha inválidos")
 
@@ -78,6 +81,21 @@ SITUACAO_TEXTO = {
     'reprovado': 'Reprovado',
 }
 
+def _reprovada_por_falta(matricula, faltas=None):
+    """A matrícula está com a frequência abaixo da mínima na disciplina da turma."""
+    if faltas is None:
+        faltas = _faltas_por_matricula([matricula]).get(matricula.id, 0)
+    return reprovado_por_falta(matricula.turma.disciplina.total_periodos, faltas)
+
+def _situacao_texto(nota, por_falta=None):
+    """Situação como as tabelas de notas mostram; a reprovação por frequência vem escrita por extenso."""
+    if nota.situacao == 'reprovado':
+        if por_falta is None:
+            por_falta = _reprovada_por_falta(nota.matricula)
+        if por_falta:
+            return 'Reprovado por falta'
+    return SITUACAO_TEXTO.get(nota.situacao, 'Cursando')
+
 def _exame_aberto(nota):
     """O exame só é lançado para quem está em exame e ainda não fez."""
     return nota.situacao == 'exame' and nota.nota_exame is None
@@ -95,6 +113,8 @@ def _linhas_tabela_notas(turma, avaliacoes):
         m.aluno_id: m
         for m in Matricula.objects.filter(turma=turma, ativo=True)
     }
+    faltas = _faltas_por_matricula(list(matriculas.values()))
+    total_periodos = turma.disciplina.total_periodos
     resumos = {
         n.matricula_id: n
         for n in Nota.objects.filter(matricula__in=matriculas.values())
@@ -113,6 +133,7 @@ def _linhas_tabela_notas(turma, avaliacoes):
     linhas = []
     for aluno in alunos:
         resumo = resumos.get(matriculas[aluno.id].id)
+        por_falta = reprovado_por_falta(total_periodos, faltas.get(matriculas[aluno.id].id, 0))
         linhas.append({
             'aluno': aluno,
             'notas': [
@@ -121,7 +142,7 @@ def _linhas_tabela_notas(turma, avaliacoes):
             ],
             'nota_id': resumo.id if resumo else None,
             'media_final': resumo.media_final if resumo else None,
-            'situacao_display': SITUACAO_TEXTO.get(resumo.situacao, 'Cursando') if resumo else 'Cursando',
+            'situacao_display': _situacao_texto(resumo, por_falta) if resumo else 'Cursando',
             'nota_exame': resumo.nota_exame if resumo else None,
             'exame_aberto': bool(resumo) and _exame_aberto(resumo),
         })
@@ -151,6 +172,11 @@ def _recalcular_media_disciplina(matricula):
     else:
         nota.media_final = None
         nota.situacao = 'cursando'
+
+    # Frequência abaixo da mínima reprova na disciplina, quaisquer que sejam as notas e o exame.
+    # Nenhuma nota lançada é apagada: se as faltas forem corrigidas, a situação volta a sair das notas.
+    if _reprovada_por_falta(matricula):
+        nota.situacao = 'reprovado'
 
     nota.save()
     return nota
@@ -198,7 +224,7 @@ def lista_notas(request):
     alunos_notas = []
     sem_avaliacoes = False
 
-    turma_obj = Turma.objects.filter(id=turma_id, disciplina_id=disciplina_id).first() if disciplina_id and turma_id else None
+    turma_obj = Turma.objects.select_related('disciplina').filter(id=turma_id, disciplina_id=disciplina_id).first() if disciplina_id and turma_id else None
 
     if turma_obj:
         avaliacoes = list(_avaliacoes_da_turma(turma_obj).order_by('id'))
@@ -220,6 +246,7 @@ def lista_notas(request):
         "avaliacoes":             avaliacoes,
         "alunos_notas":           alunos_notas,
         "sem_avaliacoes":         sem_avaliacoes,
+        "turma_obj":              turma_obj,
         "disciplina_selecionada": disciplina_id,
         "turma_selecionada":      turma_id,
     })
@@ -245,6 +272,34 @@ def _turmas_sem_nota(aluno, ano=None):
         turmas = turmas.filter(ano=ano)
     com_nota = Nota.objects.filter(matricula__aluno=aluno, matricula__ativo=True).values('matricula__turma_id')
     return list(turmas.exclude(id__in=com_nota).select_related('disciplina').order_by('disciplina__nome').distinct())
+
+def _resumos_do_calculo(notas):
+    """A conta da média de cada disciplina que já tem MF, passo a passo, para o PDF do boletim."""
+    resumos = []
+    for nota in notas:
+        if nota.media_final is None:
+            continue
+        avaliacoes = _avaliacoes_da_turma(nota.turma).order_by('id')
+        notas_lancadas = {
+            na.avaliacao_id: na.nota_obtida
+            for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
+        }
+        notas_avaliacao = [(av, notas_lancadas.get(av.id)) for av in avaliacoes]
+        resumo = montar_resumo_formula(nota.disciplina, notas_avaliacao)
+        if resumo['tem_dados']:
+            resumo['disciplina_nome'] = nota.disciplina.nome
+            resumos.append(resumo)
+    return resumos
+
+# Regra de aprovação como sai no PDF do boletim. Sem os sinais de maior-ou-igual e de seta,
+# que a letra do PDF não tem.
+REGRA_DE_APROVACAO_PDF = [
+    "Nota final a partir de 7,0: Aprovado",
+    "Nota final de 4,0 a 6,99: vai para exame",
+    "Nota final abaixo de 4,0: Reprovado",
+    f"Frequência abaixo de {FREQUENCIA_MINIMA}% na disciplina: Reprovado por falta, quaisquer que sejam as notas",
+    "Após o exame: A2 = (nota final + nota do exame) ÷ 2. A2 a partir de 6,0 aprova; abaixo disso, reprova",
+]
 
 def boletim_aluno(request):
     if request.GET.get('limpar'):
@@ -281,21 +336,7 @@ def boletim_aluno(request):
         turmas_aluno = turmas_aluno.filter(ano=ano_selecionado)
     turma_aluno = turmas_aluno.values_list('nome', flat=True).first()
 
-    resumos_calculo = []
-    for nota in notas:
-        if nota.media_final is None:
-            continue
-        avaliacoes = _avaliacoes_da_turma(nota.turma).order_by('id')
-        notas_lancadas = {
-            na.avaliacao_id: na.nota_obtida
-            for na in NotaAvaliacao.objects.filter(nota=nota, avaliacao__in=avaliacoes)
-        }
-        notas_avaliacao = [(av, notas_lancadas.get(av.id)) for av in avaliacoes]
-        resumo = montar_resumo_formula(nota.disciplina, notas_avaliacao)
-        if resumo['tem_dados']:
-            resumo['disciplina_nome'] = nota.disciplina.nome
-            resumos_calculo.append(resumo)
-
+    # O resumo do cálculo e a regra de aprovação não ficam na tela: saem no PDF do Download.
     return render(request, "aluno/minhas_notas.html", {
         "notas":           notas,
         "turmas_sem_nota": turmas_sem_nota,
@@ -308,7 +349,33 @@ def boletim_aluno(request):
         "total_reprovadas":  reprovadas,
         "total_cursando":    total_cursando,
         "turma_aluno":       turma_aluno,
-        "resumos_calculo":   resumos_calculo,
+    })
+
+def grade_horario(request):
+    """Grade de horário da turma do aluno no ano atual. A grade é montada em aluno/grade_horario.py, sem banco."""
+    if not request.user.is_authenticated:
+        return redirect('login')
+    if not request.user.groups.filter(name='aluno').exists():
+        return HttpResponseForbidden("Acesso restrito ao aluno.")
+
+    ano = datetime.now().year
+    turmas = Turma.objects.filter(
+        matricula__aluno=request.user, matricula__ativo=True, ativo=True, disciplina__ativo=True, ano=ano
+    ).select_related('disciplina')
+    turmas = turmas.select_related('disciplina__professor')
+    turma = turmas.first()
+    # Professor de cada disciplina em que o aluno está matriculado.
+    professores = {t.disciplina.nome: t.disciplina.professor.first_name for t in turmas}
+
+    linhas = montar_grade(turma.nome, professores) if turma else []
+    for linha in linhas:
+        linha['aulas'] = [{'nome': nome, 'professor': professores.get(nome, '')} for nome in linha['aulas']]
+
+    return render(request, "aluno/grade_horario.html", {
+        "ano": ano,
+        "turma": turma,
+        "dias": DIAS,
+        "linhas": linhas,
     })
 
 def deletar_nota(request, id):
@@ -343,7 +410,7 @@ def editar_nota(request, id):
             if valor:
                 # Aqui só se corrige o que já foi lançado: nota nova entra pelo Cadastro.
                 if notas_lancadas.get(avaliacao.id) is None:
-                    erro = f"A nota de '{avaliacao.nome}' ainda não foi lançada. Para lançar, use o Cadastro de Notas."
+                    erro = f"A nota de '{avaliacao.nome}' ainda não foi lançada. Para lançar, use o Cadastro de notas."
                     break
                 try:
                     valor_float = float(valor)
@@ -390,6 +457,7 @@ def editar_nota(request, id):
         "nota": nota,
         "editando": True,
         "turma_do_aluno": turma_do_aluno,
+        "situacao_texto": _situacao_texto(nota),
         "avaliacoes_com_nota": avaliacoes_com_nota,
         "sem_avaliacoes": not avaliacoes.exists(),
     })
@@ -412,6 +480,11 @@ def cadastrar_notas(request):
     # "Limpar filtros" tira só o filtro das notas e continua na mesma turma.
     if request.GET.get('limpar_filtro'):
         request.session.pop('cadastro_notas_lancamento', None)
+        return redirect('cadastrar-notas')
+
+    # A tabela recarrega aqui depois que o Salvar gravou as notas: mostra a mensagem, como nos outros botões Salvar.
+    if request.GET.get('salvo'):
+        messages.success(request, 'Notas salvas com sucesso!')
         return redirect('cadastrar-notas')
 
     if request.method == 'POST' and request.POST.get('acao') == 'filtrar_notas':
@@ -932,7 +1005,7 @@ def editar_nota_avaliacao_ajax(request):
         if not so_lancar and valor is not None and not NotaAvaliacao.objects.filter(
             nota__matricula=matricula, avaliacao=avaliacao, nota_obtida__isnull=False
         ).exists():
-            return JsonResponse({'ok': False, 'erro': 'Essa nota ainda não foi lançada. Para lançar, use o Cadastro de Notas.'})
+            return JsonResponse({'ok': False, 'erro': 'Essa nota ainda não foi lançada. Para lançar, use o Cadastro de notas.'})
 
         nota, _ = Nota.objects.get_or_create(matricula=matricula, defaults={'situacao': 'cursando'})
         nota_avaliacao, _ = NotaAvaliacao.objects.get_or_create(nota=nota, avaliacao=avaliacao)
@@ -958,14 +1031,14 @@ def editar_nota_avaliacao_ajax(request):
         'valor': '' if valor is None else str(valor),
         # Média zero com traço, como o |default:"-" da tabela.
         'media_final': _nota_texto(nota.media_final or None),
-        'situacao': SITUACAO_TEXTO.get(nota.situacao, 'Cursando'),
+        'situacao': _situacao_texto(nota),
         'nota_exame': _nota_texto(nota.nota_exame),
         'nota_id': nota.id,
         'exame_aberto': _exame_aberto(nota),
     }
     if ja_lancada:
         resposta['ja_lancada'] = True
-        resposta['erro'] = 'Essa nota já tinha sido lançada e não foi alterada. Para corrigir, use a Lista de Notas.'
+        resposta['erro'] = 'Essa nota já tinha sido lançada e não foi alterada. Para corrigir, use a Lista de notas.'
     return JsonResponse(resposta)
 
 @require_POST
@@ -1025,6 +1098,22 @@ def _datas_do_diario(request):
         hoje = timezone.now().astimezone(FUSO_BRASILIA).date()
         return hoje, hoje - timedelta(days=1), hoje + timedelta(days=1)
 
+# Ano letivo: de 1º de fevereiro a 20 de dezembro do ano da turma (dia, mês). Fora dele não há
+# aula: o diário não abre a data nem grava falta. Para mudar o período, é só trocar estas datas.
+INICIO_ANO_LETIVO = (1, 2)
+FIM_ANO_LETIVO = (20, 12)
+
+def _periodo_letivo(ano):
+    """Primeiro e último dia do ano letivo daquele ano."""
+    return (
+        datetime(ano, INICIO_ANO_LETIVO[1], INICIO_ANO_LETIVO[0]).date(),
+        datetime(ano, FIM_ANO_LETIVO[1], FIM_ANO_LETIVO[0]).date(),
+    )
+
+def _fora_do_ano_letivo(turma, data):
+    inicio, fim = _periodo_letivo(turma.ano)
+    return not inicio <= data <= fim
+
 def _faltas_por_matricula(matriculas):
     """Faltas de cada matrícula: registros Falta em aulas realizadas, justificadas ou não (cada um vale 1 período)."""
     return dict(
@@ -1041,13 +1130,13 @@ def _estado_do_periodo(faltas_na_aula, matricula_id, periodo):
         return 'P'
     return 'J' if faltas_na_aula[(matricula_id, periodo)] else 'F'
 
-def _aula_do_professor(aula_id, professor):
-    """A aula enviada pelo diário, se a turma e a disciplina estiverem ativas e a disciplina for do professor."""
+def _aula_do_diario(aula_id):
+    """A aula enviada pelo diário, se a turma e a disciplina estiverem ativas."""
     aula_id = _inteiro(aula_id)
     if aula_id is None:
         return None
     return Aula.objects.select_related('turma__disciplina').filter(
-        id=aula_id, turma__ativo=True, turma__disciplina__ativo=True, turma__disciplina__professor=professor
+        id=aula_id, turma__ativo=True, turma__disciplina__ativo=True
     ).first()
 
 @_exige_professor
@@ -1068,8 +1157,8 @@ def diario_classe(request):
     disciplina_id = request.session.get('filtro_diario_disciplina', '')
     turma_id      = request.session.get('filtro_diario_turma', '')
 
-    # O professor só vê as próprias disciplinas e as turmas delas.
-    disciplinas = Disciplina.objects.filter(ativo=True, professor=request.user)
+    # Todas as disciplinas ativas, como nos filtros da Lista e do Cadastro de notas.
+    disciplinas = Disciplina.objects.filter(ativo=True).order_by('nome')
     disciplina_atual = disciplinas.filter(id=disciplina_id).first() if _inteiro(disciplina_id) is not None else None
     turmas = Turma.objects.filter(
         disciplina=disciplina_atual, ativo=True
@@ -1079,8 +1168,10 @@ def diario_classe(request):
     aula = None
     linhas = []
     total_periodos = None
+    # Data fora do ano letivo da turma: a tela mostra o aviso e não abre a aula.
+    fora_do_ano_letivo = bool(turma_atual) and _fora_do_ano_letivo(turma_atual, data)
 
-    if turma_atual:
+    if turma_atual and not fora_do_ano_letivo:
         # A aula é criada na primeira vez que a data é aberta, sem cadastro prévio.
         aula, _ = Aula.objects.get_or_create(turma=turma_atual, data=data)
         total_periodos = turma_atual.disciplina.total_periodos
@@ -1113,6 +1204,7 @@ def diario_classe(request):
                 ],
                 'faltas': faltas,
                 'frequencia': calcular_frequencia(total_periodos, faltas),
+                'reprovado_por_falta': reprovado_por_falta(total_periodos, faltas),
             })
 
     # Frequência de cada quantidade de faltas que um aluno pode chegar a ter nesta tela (as de hoje
@@ -1133,22 +1225,46 @@ def diario_classe(request):
         "linhas":                 linhas,
         "frequencias":            frequencias,
         "total_periodos":         total_periodos,
+        "frequencia_minima":      FREQUENCIA_MINIMA,
+        "fora_do_ano_letivo":     fora_do_ano_letivo,
+        "periodo_letivo":         _periodo_letivo(turma_atual.ano) if turma_atual else None,
+        "limite_faltas":          limite_de_faltas(total_periodos),
         "data":                   data,
         "data_anterior":          data_anterior,
         "data_proxima":           data_proxima,
         "dia_semana":             DIAS_DA_SEMANA[data.weekday()],
     })
 
+def _aplicar_frequencia(turma, matriculas_mudadas):
+    """
+    Depois de salvar o diário: quem ficou com a frequência abaixo da mínima passa a reprovado, e quem
+    saiu dessa condição por correção de falta volta a ter a situação das notas.
+    """
+    matriculas = list(Matricula.objects.filter(turma=turma, ativo=True).select_related('turma__disciplina'))
+    faltas = _faltas_por_matricula(matriculas)
+    situacoes = dict(Nota.objects.filter(matricula__in=matriculas).values_list('matricula_id', 'situacao'))
+
+    for matricula in matriculas:
+        por_falta = _reprovada_por_falta(matricula, faltas.get(matricula.id, 0))
+        reprovado = situacoes.get(matricula.id) == 'reprovado'
+        if (por_falta and not reprovado) or (reprovado and not por_falta and matricula.id in matriculas_mudadas):
+            _recalcular_media_disciplina(matricula)
+
 @require_POST
 @_exige_professor
 def salvar_diario_ajax(request):
-    aula = _aula_do_professor(request.POST.get('aula'), request.user)
+    aula = _aula_do_diario(request.POST.get('aula'))
     if not aula:
         return JsonResponse({'ok': False, 'erro': 'Aula não encontrada.'})
+    if _fora_do_ano_letivo(aula.turma, aula.data):
+        return JsonResponse({'ok': False, 'erro': 'Essa data está fora do ano letivo da turma.'})
 
     with transaction.atomic():
         # Trava a aula: dois envios ao mesmo tempo não gravam a mesma falta duas vezes.
-        aula = Aula.objects.select_for_update().get(id=aula.id)
+        aula = Aula.objects.select_related('turma__disciplina').select_for_update(of=('self',)).get(id=aula.id)
+        ja_era_realizada = aula.realizada
+        # Matrículas com falta mudada neste envio.
+        mudadas = set()
         # Aula salva como realizada não volta para não realizada: as faltas lançadas continuam valendo.
         realizada_na_tela = request.POST.get('realizada') == '1'
         aula.realizada = aula.realizada or realizada_na_tela
@@ -1168,11 +1284,19 @@ def salvar_diario_ajax(request):
                     if estado == 'P':
                         if falta:
                             falta.delete()
+                            mudadas.add(matricula.id)
                     elif falta is None:
                         Falta.objects.create(aula=aula, matricula=matricula, periodo=periodo, justificada=estado == 'J')
+                        mudadas.add(matricula.id)
                     elif falta.justificada != (estado == 'J'):
                         falta.justificada = estado == 'J'
                         falta.save(update_fields=['justificada'])
+
+        # A aula passou a valer agora: as faltas que já estavam guardadas nela entram na conta.
+        if aula.realizada and not ja_era_realizada:
+            mudadas.update(Falta.objects.filter(aula=aula).values_list('matricula_id', flat=True))
+
+        _aplicar_frequencia(aula.turma, mudadas)
 
     # A tela recarrega depois da resposta e mostra a mensagem, como nos outros botões Salvar.
     messages.success(request, 'Diário salvo com sucesso!')
@@ -1259,6 +1383,43 @@ def gerar_relatorio(request):
     if situacao_final == 'Em andamento':
         resumo += f"  ·  {total_cursando} cursando"
     c.drawString(72, y, resumo)
+
+    largura_do_texto = width - 144
+
+    def descer(quanto):
+        """Desce a linha; no fim da folha, continua no alto da próxima."""
+        nonlocal y
+        y -= quanto
+        if y < 72:
+            c.showPage()
+            y = height - 72
+
+    def secao(titulo):
+        descer(28)
+        c.line(72, y + 16, width - 72, y + 16)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(72, y, titulo)
+
+    def paragrafo(texto, recuo=0):
+        # Texto mais largo que a folha continua na linha de baixo.
+        c.setFont("Helvetica", 10)
+        for linha in simpleSplit(texto, "Helvetica", 10, largura_do_texto - recuo):
+            descer(15)
+            c.drawString(72 + recuo, y, linha)
+
+    # Resumo do cálculo: a conta da média de cada disciplina que já tem MF
+    resumos = _resumos_do_calculo(notas)
+    if resumos:
+        secao("Resumo do cálculo")
+        for item in resumos:
+            descer(18)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(72, y, item['disciplina_nome'])
+            paragrafo(item['formula_texto'], recuo=12)
+
+    secao("Regra de aprovação")
+    for regra in REGRA_DE_APROVACAO_PDF:
+        paragrafo(regra)
 
     c.save()
     return response
@@ -1459,12 +1620,12 @@ MAXIMO_TOTAL_PERIODOS = 2147483647
 
 def _ler_total_periodos(request):
     """
-    Campo opcional "Total de períodos" do formulário de disciplina.
-    Devolve (valor, erro): vazio vira None; preenchido tem que ser um inteiro maior que zero.
+    Campo obrigatório "Total de períodos" do formulário de disciplina: é a base da frequência
+    do diário de classe e da reprovação por falta. Devolve (valor, erro); tem que ser um inteiro maior que zero.
     """
     texto = (request.POST.get('total_periodos') or '').strip()
     if not texto:
-        return None, None
+        return None, "Informe o total de períodos da disciplina."
     valor = _inteiro(texto)
     if valor is None or valor < 1:
         return None, "O total de períodos deve ser um número inteiro maior que zero."

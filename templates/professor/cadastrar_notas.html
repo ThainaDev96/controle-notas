@@ -5,7 +5,7 @@
     {% if editando %}
         Editar Nota
     {% else %}
-        Cadastrar Notas
+        Cadastrar notas
     {% endif %}
 {% endblock %}
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
@@ -54,9 +54,9 @@
             <div class="page-header-title">
                 <div class="d-inline">
                     {% if editando %}
-                        <h4>Edição de Notas</h4>
+                        <h4>Edição de notas</h4>
                     {% else %}
-                        <h4>Cadastro de Notas</h4>
+                        <h4>Cadastro de notas</h4>
                     {% endif %}
                 </div>
             </div>
@@ -110,9 +110,9 @@
         <div class="card">
             <div class="card-header">
                 {% if editando %}
-                    <h5>Editar Notas</h5>
+                    <h5>Editar notas</h5>
                 {% else %}
-                    <h5>Cadastrar Notas</h5>
+                    <h5>Cadastrar notas</h5>
                 {% endif %}
                 <div class="card-header-right">
                     <i class="icofont icofont-spinner-alt-5"></i>
@@ -125,7 +125,7 @@
                         <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                             <i class="ti-info" style="font-size: 22px; color: #999;"></i>
                             <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
-                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para Configurar Avaliações</span></a>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para configurar avaliações</span></a>
                         </div>
                     {% else %}
                         <form method="post" action="{% url 'editar-nota' nota.pk %}">
@@ -170,7 +170,7 @@
 
                             <!-- MÉDIA FINAL -->
                             <div class="form-group row">
-                                <label class="col-sm-2 col-form-label">Média Final</label>
+                                <label class="col-sm-2 col-form-label">Média final</label>
                                 <div class="col-sm-10">
                                     <input type="text" class="form-control" id="media_final"
                                         value="{{ nota.media_final|floatformat:2 }}"
@@ -185,7 +185,8 @@
                                 <div class="col-sm-10">
                                     <input type="text" class="form-control" id="situacao"
                                         data-exame="{{ nota.nota_exame|default_if_none:'' }}"
-                                        value="{{ nota.get_situacao_display }}"
+                                        data-por-falta="{% if situacao_texto == 'Reprovado por falta' %}1{% endif %}"
+                                        value="{{ situacao_texto }}"
                                         placeholder="Definida automaticamente" readonly
                                         style="background-color: #f4f7fa;">
                                 </div>
@@ -241,7 +242,7 @@
                         <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                             <i class="ti-info" style="font-size: 22px; color: #999;"></i>
                             <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
-                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para Configurar Avaliações</span></a>
+                            <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para configurar avaliações</span></a>
                         </div>
                     {% else %}
                         <!-- ETAPA 2: LANÇAR NOTAS -->
@@ -250,6 +251,7 @@
                             <a href="{% url 'cadastrar-notas' %}?limpar=1" class="btn-filtrar-delicado ml-2">
                                 <i class="ti-close"></i> <span class="texto-sublinhado">Trocar disciplina/turma</span>
                             </a>
+                            {% include "partials/modo-calculo-turma.html" with disciplina=turma_obj.disciplina %}
                         </div>
 
                         {% if not tem_alunos %}
@@ -259,10 +261,23 @@
                             </div>
                         {% else %}
                             <div id="aviso-todas" class="alert alert-warning{% if not todas_lancadas %} d-none{% endif %}" role="status">
-                                Todas as notas dessa turma já foram lançadas. Para corrigir, use a Lista de Notas.
+                                Todas as notas dessa turma já foram lançadas. Para corrigir, use a Lista de notas.
                             </div>
 
+                            <p class="text-muted" style="font-size: 13px;">
+                                <i class="ti-hand-point-up" style="color: #03458F; margin-right: 4px;" aria-hidden="true"></i>
+                                Dê dois cliques na célula em branco para digitar a nota. As notas digitadas ficam destacadas
+                                e só são gravadas quando você clicar em <strong>Salvar</strong>; a MF e a situação aparecem depois de salvar.
+                            </p>
+
                             {% include "partials/tabela-notas.html" with modo="lancar" turma_id=turma_obj.id %}
+
+                            <!-- BOTÕES -->
+                            <div class="d-flex align-items-center justify-content-end" style="gap: 16px; margin-right: 16px;">
+                                <span id="tn-pendentes" class="text-muted" style="font-size: 13px;" role="status"></span>
+                                <button type="button" id="tn-salvar" class="btn-filtrar-delicado" disabled
+                                    data-nome="as notas de {{ turma_obj.disciplina.nome }}, turma {{ turma_obj.nome }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
+                            </div>
                         {% endif %}
                     {% endif %}
                 {% endif %}
@@ -271,6 +286,7 @@
     </div>
 </div>
 
+{% if not editando and tem_alunos %}{% include "partials/modal-confirmar-salvar.html" %}{% endif %}
 {% endblock %}
 
 
@@ -291,6 +307,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const situacaoGravada = situacaoInput.defaultValue;
     // O exame lançado continua valendo quando uma nota muda, como no salvar.
     const exameGravado = parseFloat(situacaoInput.dataset.exame);
+    // Reprovado por falta continua reprovado, qualquer que seja a nota corrigida.
+    const porFalta = situacaoInput.dataset.porFalta === '1';
 
     // Igual ao round() do Python: no empate exato (ex.: 8.125) fica o número par, não o maior.
     function arredondar(valor) {
@@ -322,7 +340,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!isNaN(val)) {
                 // Na soma dos pesos o peso não entra: a MF é a soma das notas.
                 somaPontos += val;
-                somaPercentual += val * peso / 100;
+                // Na ponderada, como no calcular_nota_final: soma nota × peso e só divide por 100 no fim.
+                somaPercentual += val * peso;
                 somaSimples += val;
                 count++;
             }
@@ -335,7 +354,7 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const totalPorModo = { soma: somaPontos, ponderada: somaPercentual, aritmetica: somaSimples / count };
+        const totalPorModo = { soma: somaPontos, ponderada: somaPercentual / 100, aritmetica: somaSimples / count };
         const total = totalPorModo[MODO_CALCULO];
 
         if (count === campos.length && total !== undefined) {
@@ -343,7 +362,9 @@ document.addEventListener("DOMContentLoaded", function () {
             mediaInput.value = media.toFixed(2);
 
             // Quem já fez o exame não volta para a situação das notas: vale o resultado do exame, como no calcular_pos_exame.
-            if (!isNaN(exameGravado)) {
+            if (porFalta) {
+                situacaoInput.value = situacaoGravada;
+            } else if (!isNaN(exameGravado)) {
                 situacaoInput.value = arredondar((media + exameGravado) / 2) >= 6.0 ? 'Aprovado' : 'Reprovado';
             } else if (media >= 7.0) {
                 situacaoInput.value = 'Aprovado';
@@ -354,7 +375,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         } else {
             mediaInput.value = '';
-            situacaoInput.value = 'Cursando';
+            situacaoInput.value = porFalta ? situacaoGravada : 'Cursando';
         }
     }
 
@@ -408,6 +429,6 @@ if (gateDisciplina) {
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
-<script src="{% static 'js/tabela-notas.js' %}"></script>
+<script src="{% static 'js/tabela-notas.js' %}?v=3"></script>
 {% endif %}
 {% endblock %}

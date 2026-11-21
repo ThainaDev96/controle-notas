@@ -18,7 +18,7 @@ $(document).ready(function () {
 
     var dados = Dashboard.dados;
     var SITUACOES = ['aprovado', 'exame', 'reprovado', 'cursando'];
-    var CORES = ['#03458F', '#C4D0E9', '#B4244A', '#D4A000'];
+    var CORES = ['#03458F', '#C4D0E9', '#E3172A', '#D4A000'];
 
     // ANO LETIVO: recarrega a página com ?ano=, porque muda todos os cards de uma vez
     $('#da-ano').on('change', function () {
@@ -109,6 +109,29 @@ $(document).ready(function () {
     });
     $(pizzaDisciplina).on('change', atualizarPizza);
 
+    // Ao abrir, a rosca mostra a turma e a disciplina com mais resultado fechado (menos "cursando"),
+    // em vez da primeira da lista, que pode estar toda em amarelo. No empate, a que tem mais
+    // situações diferentes (aprovados, em exame e reprovados); se ainda empatar, a primeira.
+    function escolherInicial() {
+        var melhor = null;
+        dados.turmas.forEach(function (turma, indiceTurma) {
+            turma.disciplinas.forEach(function (disciplina) {
+                var total = disciplina.aprovado + disciplina.exame + disciplina.reprovado + disciplina.cursando;
+                var fechados = total ? (total - disciplina.cursando) / total : 0;
+                var variedade = (disciplina.aprovado > 0) + (disciplina.exame > 0) + (disciplina.reprovado > 0);
+                if (!melhor || fechados > melhor.fechados ||
+                        (fechados === melhor.fechados && variedade > melhor.variedade)) {
+                    melhor = { fechados: fechados, variedade: variedade, turma: indiceTurma, disciplina: disciplina.id };
+                }
+            });
+        });
+        if (melhor && melhor.fechados > 0) {
+            pizzaTurma.value = melhor.turma;
+            disciplinaEscolhida = melhor.disciplina;
+        }
+    }
+
+    escolherInicial();
     preencherDisciplinas();
     atualizarPizza();
 

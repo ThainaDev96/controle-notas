@@ -1,0 +1,10 @@
+{# Modo de cálculo da disciplina da turma, na Lista e no Cadastro de Notas. O modo é da disciplina e vale para todas as turmas dela. #}
+<p class="text-muted mt-2 mb-0" style="font-size: 13px;">
+    <i class="ti-settings" style="color: #03458F; margin-right: 4px;" aria-hidden="true"></i>
+    Modo de cálculo dessa turma:
+    {% if disciplina.modo_calculo %}
+        <strong>{{ disciplina.get_modo_calculo_display }}</strong>
+    {% else %}
+        <strong>ainda não configurado</strong>
+    {% endif %}
+</p>

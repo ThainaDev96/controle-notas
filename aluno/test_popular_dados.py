@@ -94,13 +94,13 @@ class DistribuicaoTests(TestCase):
     def setUpTestData(cls):
         cls.saida = popular()
 
-    def test_cada_turma_tem_20_alunos_em_cada_disciplina(self):
+    def test_cada_turma_tem_8_alunos_em_cada_disciplina(self):
         contagem = Counter(
             Matricula.objects.filter(ativo=True, turma__ativo=True).values_list(
                 'turma__nome', 'turma__disciplina__nome'
             )
         )
-        esperado = {(turma, disciplina): 20 for turma in TURMAS for disciplina in MODOS}
+        esperado = {(turma, disciplina): 8 for turma in TURMAS for disciplina in MODOS}
         self.assertEqual(dict(contagem), esperado)
 
     def test_a_turma_tem_os_mesmos_alunos_em_todas_as_disciplinas(self):
@@ -117,7 +117,7 @@ class DistribuicaoTests(TestCase):
         turmas_por_aluno = {}
         for aluno_id, turma in Matricula.objects.values_list('aluno_id', 'turma__nome').distinct():
             turmas_por_aluno.setdefault(aluno_id, set()).add(turma)
-        self.assertEqual(len(turmas_por_aluno), 100)
+        self.assertEqual(len(turmas_por_aluno), 40)
         self.assertEqual({len(turmas) for turmas in turmas_por_aluno.values()}, {1})
 
     def test_modo_de_calculo_de_cada_disciplina(self):
@@ -132,15 +132,15 @@ class DistribuicaoTests(TestCase):
             for disciplina, total in QTD_AVALIACOES.items():
                 situacao = por_modo[MODOS[disciplina]]
                 if situacao == 'sem_nota':
-                    esperado = Counter({0: 20})
+                    esperado = Counter({0: 8})
                 elif situacao == 'tudo':
-                    esperado = Counter({total: 20})
+                    esperado = Counter({total: 8})
                 else:
-                    # Na mesma turma: 5 sem nada, 5 com a primeira, 5 só sem a última e 5 com tudo.
-                    esperado = Counter({0: 5})
-                    esperado[1] += 5
-                    esperado[total - 1] += 5
-                    esperado[total] += 5
+                    # Na mesma turma: 2 sem nada, 2 com a primeira, 2 só sem a última e 2 com tudo.
+                    esperado = Counter({0: 2})
+                    esperado[1] += 2
+                    esperado[total - 1] += 2
+                    esperado[total] += 2
                 self.assertEqual(lancadas_por_aluno(turma, disciplina), esperado, (turma, disciplina))
 
     def test_disciplina_sem_configuracao_nao_tem_nota_em_nenhuma_turma(self):
@@ -152,7 +152,7 @@ class DistribuicaoTests(TestCase):
             matricula__turma__nome='1A', matricula__turma__disciplina__nome='Matemática'
         ).exists())
         registros = Nota.objects.filter(matricula__turma__nome='1A', matricula__turma__disciplina__nome='Física')
-        self.assertEqual(Counter(registros.values_list('situacao', flat=True)), Counter({'cursando': 20}))
+        self.assertEqual(Counter(registros.values_list('situacao', flat=True)), Counter({'cursando': 8}))
 
     def test_quem_nao_tem_tudo_lancado_fica_cursando_e_sem_media(self):
         for nota in Nota.objects.select_related('matricula__turma__disciplina'):
@@ -187,15 +187,16 @@ class DistribuicaoTests(TestCase):
 
     def test_situacoes_de_cada_celula(self):
         tudo = {
-            'Matemática': {'aprovado': 5, 'exame': 5, 'reprovado': 10},
-            'Português': {'aprovado': 5, 'exame': 5, 'reprovado': 10},
-            'História': {'aprovado': 10, 'exame': 5, 'reprovado': 5},
-            'Física': {'aprovado': 13, 'reprovado': 7},
-            'Literatura': {'aprovado': 13, 'reprovado': 7},
-            'Geografia': {'aprovado': 13, 'reprovado': 7},
+            'Matemática': {'aprovado': 2, 'exame': 2, 'reprovado': 4},
+            'Português': {'aprovado': 2, 'exame': 2, 'reprovado': 4},
+            'História': {'aprovado': 4, 'exame': 2, 'reprovado': 2},
+            'Física': {'aprovado': 5, 'reprovado': 3},
+            'Literatura': {'aprovado': 5, 'reprovado': 3},
+            'Geografia': {'aprovado': 5, 'reprovado': 3},
         }
-        parcial_primeira = {'cursando': 10, 'aprovado': 2, 'exame': 2, 'reprovado': 1}
-        parcial_segunda = {'cursando': 10, 'aprovado': 3, 'reprovado': 2}
+        # Dos 2 com tudo lançado, um é aprovado e o outro cai em exame (que, já lançado, ele não passa).
+        parcial_primeira = {'cursando': 4, 'aprovado': 1, 'exame': 1}
+        parcial_segunda = {'cursando': 4, 'aprovado': 1, 'reprovado': 1}
         parcial = {
             'Matemática': parcial_primeira, 'Português': parcial_primeira, 'História': parcial_primeira,
             'Física': parcial_segunda, 'Literatura': parcial_segunda, 'Geografia': parcial_segunda,
@@ -208,13 +209,23 @@ class DistribuicaoTests(TestCase):
                 elif situacao == 'parcial':
                     esperado = parcial[disciplina]
                 elif turma == '1A' and disciplina in ('Física', 'Literatura', 'Geografia'):
-                    esperado = {'cursando': 20}
+                    esperado = {'cursando': 8}
                 else:
                     esperado = {}
                 self.assertEqual(self._situacoes(turma, disciplina), Counter(esperado), (turma, disciplina))
 
-    def test_os_100_alunos_ficam_no_grupo_aluno(self):
-        self.assertEqual(User.objects.filter(groups__name='aluno').count(), 100)
+    def test_os_50_alunos_ficam_no_grupo_aluno(self):
+        # 40 nas turmas e 10 sem turma.
+        self.assertEqual(User.objects.filter(groups__name='aluno').count(), 50)
+
+    def test_dez_alunos_ficam_sem_turma_para_testar_a_matricula(self):
+        sem_turma = User.objects.filter(groups__name='aluno', matricula__isnull=True)
+        self.assertEqual(sem_turma.count(), 10)
+        aluno = sem_turma.first()
+        self.assertTrue(aluno.first_name)
+        self.assertTrue(self.client.login(username=aluno.username, password=SENHA_TESTE))
+        linha = next(l for l in self.saida.splitlines() if l.startswith("Sem turma"))
+        self.assertEqual(set(re.findall(r"\b\d{6,}\b", linha)), set(sem_turma.values_list('username', flat=True)))
 
     def test_professor_criado_fica_no_grupo_e_entra_com_a_senha_de_teste(self):
         for username in ('carlos.souza', 'ana.oliveira', 'roberto.lima'):
@@ -228,25 +239,25 @@ class DistribuicaoTests(TestCase):
             self.assertEqual(round(nota, 1), nota)
 
     def test_parcial_mostra_os_resultados_de_quem_ja_tem_tudo(self):
-        # 5 sem registro, 10 cursando e os 5 com tudo lançado: 2 aprovados, 2 em exame e 1 reprovado.
+        # 2 sem registro, 4 cursando e os 2 com tudo lançado: 1 aprovado e 1 em exame.
         self.assertEqual(
             self._situacoes('2A', 'Matemática'),
-            Counter({'cursando': 10, 'aprovado': 2, 'exame': 2, 'reprovado': 1}),
+            Counter({'cursando': 4, 'aprovado': 1, 'exame': 1}),
         )
 
     def test_primeira_disciplina_do_calculo_fica_com_exame_pendente(self):
-        # 5 aprovados, 5 em exame, 5 reprovados em poucas disciplinas (Matemática é uma delas) e 5 em todas.
-        self.assertEqual(self._situacoes('3A', 'Matemática'), Counter({'reprovado': 10, 'aprovado': 5, 'exame': 5}))
+        # 2 aprovados, 2 em exame, 2 reprovados em poucas disciplinas (Matemática é uma delas) e 2 em todas.
+        self.assertEqual(self._situacoes('3A', 'Matemática'), Counter({'reprovado': 4, 'aprovado': 2, 'exame': 2}))
         self.assertFalse(Nota.objects.filter(
             matricula__turma__nome='3A', matricula__turma__disciplina__nome='Matemática', nota_exame__isnull=False
         ).exists())
 
     def test_segunda_disciplina_do_calculo_fica_com_exame_lancado(self):
-        # 5 aprovados, 3 que passaram no exame, 2 que não passaram, 5 aprovados aqui e 5 reprovados em tudo.
-        self.assertEqual(self._situacoes('3A', 'Física'), Counter({'aprovado': 13, 'reprovado': 7}))
+        # 2 aprovados, 1 que passou no exame, 1 que não passou, 2 aprovados aqui e 2 reprovados em tudo.
+        self.assertEqual(self._situacoes('3A', 'Física'), Counter({'aprovado': 5, 'reprovado': 3}))
         self.assertEqual(Nota.objects.filter(
             matricula__turma__nome='3A', matricula__turma__disciplina__nome='Física', nota_exame__isnull=False
-        ).count(), 5)
+        ).count(), 2)
 
     def _media_na_3a(self, disciplina, media):
         return Nota.objects.get(
@@ -281,7 +292,7 @@ class DistribuicaoTests(TestCase):
         for aluno in alunos:
             self.client.force_login(aluno)
             finais[self.client.get(reverse('minhas-notas')).context['situacao_final']] += 1
-        self.assertEqual(finais, Counter({'aprovado': 10, 'em_andamento': 5, 'reprovado': 5}))
+        self.assertEqual(finais, Counter({'aprovado': 4, 'em_andamento': 2, 'reprovado': 2}))
 
     def test_aluno_entra_com_a_senha_de_teste(self):
         aluno = Matricula.objects.first().aluno
@@ -354,7 +365,7 @@ class ExcessoTests(TestCase):
 
     def test_alunos_do_csv_que_sobram_saem_do_banco(self):
         popular()
-        self.assertEqual(User.objects.filter(username__in=self.matriculas_csv).count(), 100)
+        self.assertEqual(User.objects.filter(username__in=self.matriculas_csv).count(), 50)
 
     def test_conta_de_teste_continua_igual_e_sem_turma(self):
         popular()
@@ -438,11 +449,11 @@ class ExcessoTests(TestCase):
         self.assertTrue(User.objects.filter(username=sobra).exists())
         self.assertTrue(Disciplina.objects.filter(id=quimica.id).exists())
 
-    def test_turma_inativa_da_lista_volta_a_ativa_com_20_alunos(self):
+    def test_turma_inativa_da_lista_volta_a_ativa_com_8_alunos(self):
         popular()
         self.turma_inativa.refresh_from_db()
         self.assertTrue(self.turma_inativa.ativo)
-        self.assertEqual(self.turma_inativa.matricula_set.count(), 20)
+        self.assertEqual(self.turma_inativa.matricula_set.count(), 8)
 
     def test_disciplina_existente_nao_duplica_e_mantem_o_professor(self):
         popular()
@@ -475,16 +486,16 @@ class ExcessoTests(TestCase):
         popular()
         do_ano = set(Matricula.objects.filter(turma=self.turma_com_aula).values_list('aluno_id', flat=True))
         anteriores = set(Matricula.objects.filter(turma=self.turma_antiga).values_list('aluno_id', flat=True))
-        self.assertEqual(len(anteriores), 20)
+        self.assertEqual(len(anteriores), 8)
         self.assertEqual(anteriores, do_ano)
-        self.assertEqual(lancadas_por_aluno('1A', 'Geografia', ano=self.ano - 1), Counter({4: 20}))
+        self.assertEqual(lancadas_por_aluno('1A', 'Geografia', ano=self.ano - 1), Counter({4: 8}))
         self.assertFalse(Nota.objects.filter(matricula__turma=self.turma_antiga, situacao='exame').exists())
 
     def test_turma_de_ano_anterior_tem_exame_lancado_tambem_na_primeira_disciplina_do_calculo(self):
         popular()
         notas = Nota.objects.filter(matricula__turma=self.turma_antiga_matematica)
         self.assertFalse(notas.filter(situacao='exame').exists())
-        self.assertEqual(notas.filter(nota_exame__isnull=False).count(), 5)
+        self.assertEqual(notas.filter(nota_exame__isnull=False).count(), 2)
 
     def test_professor_sem_senha_valida_passa_a_entrar_com_a_senha_de_teste(self):
         popular()
@@ -519,7 +530,7 @@ class ForaDoBancoLocalTests(TestCase):
     def test_em_banco_vazio_popula_sem_senha_de_teste(self):
         with self._fora_do_banco_local():
             popular()
-        self.assertEqual(Matricula.objects.values('aluno_id').distinct().count(), 100)
+        self.assertEqual(Matricula.objects.values('aluno_id').distinct().count(), 40)
         aluno = Matricula.objects.first().aluno
         self.assertFalse(self.client.login(username=aluno.username, password=SENHA_TESTE))
         for username in ('carlos.souza', 'ana.oliveira', 'roberto.lima'):
@@ -551,4 +562,4 @@ class ForaDoBancoLocalTests(TestCase):
         User.objects.create_superuser(username='admin', password='senha-do-admin')
         with self._fora_do_banco_local():
             popular()
-        self.assertEqual(Matricula.objects.values('aluno_id').distinct().count(), 100)
+        self.assertEqual(Matricula.objects.values('aluno_id').distinct().count(), 40)

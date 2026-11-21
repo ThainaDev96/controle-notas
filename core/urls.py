@@ -38,6 +38,7 @@ urlpatterns = [
     path('notas/editar-avaliacao-ajax/', views.editar_nota_avaliacao_ajax, name='editar-nota-avaliacao-ajax'),
     path('notas/lancar-exame-ajax/', views.lancar_nota_exame_ajax, name='lancar-nota-exame-ajax'),
     path('boletim-aluno/', views.boletim_aluno, name='minhas-notas'),
+    path('grade-horario/', views.grade_horario, name='grade-horario'),
     path('relatorio/', views.gerar_relatorio, name='gerar-relatorio'),
     path('gestao/dashboard/', views.dashboard_admin, name='dashboard-admin'),
     path('gestao/disciplinas/', views.gestao_disciplinas, name='gestao-disciplinas'),

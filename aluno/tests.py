@@ -9,7 +9,7 @@ from django.db import connection, connections
 from django.test import Client, SimpleTestCase, TestCase, TransactionTestCase
 from django.urls import reverse
 
-from aluno.calculo_frequencia import calcular_frequencia
+from aluno.calculo_frequencia import calcular_frequencia, limite_de_faltas, reprovado_por_falta
 from aluno.calculo_notas import calcular_nota_final, calcular_pos_exame, classificar, montar_resumo_formula
 from aluno.models import Disciplina, Turma, Matricula, Nota, Avaliacao, NotaAvaliacao, Aula, Falta
 from aluno.views import SITUACAO_TEXTO
@@ -32,6 +32,19 @@ class CalcularFrequenciaTests(SimpleTestCase):
     def test_sem_total_de_periodos(self):
         self.assertEqual(calcular_frequencia(None, 3), "-")
         self.assertEqual(calcular_frequencia(0, 3), "-")
+
+    def test_reprova_por_falta_abaixo_de_75_por_cento(self):
+        # Em 72 períodos, 18 faltas são 75% exatos e ainda não reprovam; a 19ª reprova.
+        self.assertEqual(limite_de_faltas(72), 19)
+        self.assertFalse(reprovado_por_falta(72, 18))
+        self.assertTrue(reprovado_por_falta(72, 19))
+        self.assertFalse(reprovado_por_falta(4, 1))
+        self.assertTrue(reprovado_por_falta(4, 2))
+
+    def test_sem_total_de_periodos_ninguem_reprova_por_falta(self):
+        self.assertIsNone(limite_de_faltas(None))
+        self.assertFalse(reprovado_por_falta(None, 99))
+        self.assertFalse(reprovado_por_falta(0, 99))
 
 
 class CalculoSomaDosPesosTests(SimpleTestCase):
@@ -258,12 +271,6 @@ class RecalculoAoMudarPesoTests(TestCase):
         self.assertFalse(resposta['ok'])
         self.assertFalse(Avaliacao.objects.filter(nome='Extra').exists())
 
-    def test_peso_vazio_nao_conta_na_mf(self):
-        # 5 x 60% = 3
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        self.assertTrue(self._mudar_peso(self.prova, '')['ok'])
-        self.assertEqual(self._estado(nota), (3.0, 'reprovado', None))
-
     def test_peso_zero_nao_conta_na_mf(self):
         # 5 x 60% = 3
         nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
@@ -423,33 +430,134 @@ class DiarioClasseTests(TestCase):
         self.assertEqual(self.client.get(reverse('diario-classe')).status_code, 403)
         self.assertEqual(self.client.post(reverse('salvar-diario-ajax')).status_code, 403)
 
-    def test_professor_ve_so_as_proprias_disciplinas(self):
+    def test_filtro_tem_todas_as_disciplinas_ativas(self):
+        # Como na Lista e no Cadastro de notas: todas as disciplinas ativas, em ordem de nome.
+        Disciplina.objects.create(nome='Geopolítica', professor=self.professor, ativo=False)
         self.client.force_login(self.professor)
         resposta = self.client.get(reverse('diario-classe'))
-        self.assertEqual(list(resposta.context['disciplinas']), [self.disciplina])
-        self.assertNotContains(resposta, 'ainda não tem nenhuma disciplina ativa')
+        self.assertEqual(list(resposta.context['disciplinas']), [self.disciplina_outro, self.disciplina])
+        self.assertNotContains(resposta, 'Nenhuma disciplina ativa')
 
-    def test_professor_sem_disciplina_ativa_ve_aviso(self):
-        Disciplina.objects.filter(professor=self.professor).update(ativo=False)
+    def test_sem_disciplina_ativa_ve_aviso(self):
+        Disciplina.objects.update(ativo=False)
         self.client.force_login(self.professor)
         resposta = self.client.get(reverse('diario-classe'))
-        self.assertContains(resposta, 'Você ainda não tem nenhuma disciplina ativa')
+        self.assertContains(resposta, 'Ainda não há nenhuma disciplina ativa')
         self.assertNotContains(resposta, 'Selecione a disciplina e a turma para ver o diário')
 
-    def test_turma_de_outro_professor_nao_abre(self):
+    def test_turma_de_disciplina_de_outro_professor_abre(self):
+        self.client.force_login(self.professor)
+        resposta = self._abrir_diario(turma=self.turma_outro)
+        self.assertEqual(resposta.context['turma_atual'], self.turma_outro)
+
+    def test_turma_de_disciplina_inativa_nao_abre(self):
+        Disciplina.objects.filter(id=self.disciplina_outro.id).update(ativo=False)
         self.client.force_login(self.professor)
         resposta = self._abrir_diario(turma=self.turma_outro)
         self.assertIsNone(resposta.context['turma_atual'])
         self.assertContains(resposta, 'Selecione a disciplina e a turma para ver o diário')
         self.assertFalse(Aula.objects.exists())
 
-    def test_salvar_em_aula_de_outro_professor(self):
+    def test_salvar_em_aula_de_disciplina_de_outro_professor(self):
         aula = Aula.objects.create(turma=self.turma, data=self.DATA)
         self.client.force_login(self.outro_professor)
+        self.assertTrue(self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})['ok'])
+        self.assertEqual(Falta.objects.count(), 1)
+
+    def test_salvar_em_aula_de_disciplina_inativa(self):
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        Disciplina.objects.filter(id=self.disciplina.id).update(ativo=False)
+        self.client.force_login(self.professor)
         self.assertFalse(self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})['ok'])
         self.assertFalse(Falta.objects.exists())
-        aula.refresh_from_db()
-        self.assertFalse(aula.realizada)
+
+    # ---------- Reprovação por falta ----------
+
+    def _com_faltas_antigas(self, matricula, quantidade):
+        """Faltas já gravadas em aulas realizadas de outros dias, 4 períodos por aula."""
+        for numero in range(quantidade):
+            if numero % 4 == 0:
+                aula = Aula.objects.create(turma=self.turma, data=f'2026-09-{numero // 4 + 1:02d}', realizada=True)
+            Falta.objects.create(aula=aula, matricula=matricula, periodo=numero % 4 + 1)
+
+    def _situacao(self, matricula):
+        nota = Nota.objects.filter(matricula=matricula).first()
+        return nota.situacao if nota else None
+
+    def test_com_75_por_cento_exatos_nao_reprova(self):
+        self._com_faltas_antigas(self.matricula_bruna, 17)
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        self.client.force_login(self.professor)
+        self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})
+        self.assertIsNone(self._situacao(self.matricula_bruna))
+        linha = self._abrir_diario().context['linhas'][1]
+        self.assertEqual((linha['faltas'], linha['frequencia'], linha['reprovado_por_falta']), (18, '75,00%', False))
+
+    def test_abaixo_de_75_por_cento_reprova_por_falta(self):
+        self._com_faltas_antigas(self.matricula_bruna, 18)
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        self.client.force_login(self.professor)
+        # A falta justificada conta como as outras.
+        self._salvar(aula, True, {(self.matricula_bruna, 1): 'J'})
+        self.assertEqual(self._situacao(self.matricula_bruna), 'reprovado')
+        # Quem não passou do limite continua como estava.
+        self.assertIsNone(self._situacao(self.matricula_ana))
+        resposta = self._abrir_diario()
+        self.assertTrue(resposta.context['linhas'][1]['reprovado_por_falta'])
+        self.assertFalse(resposta.context['linhas'][0]['reprovado_por_falta'])
+        self.assertEqual(resposta.context['limite_faltas'], 19)
+        self.assertContains(resposta, 'dc-col-frequencia dc-col-frequencia--reprovado')
+
+    def test_corrigir_a_falta_tira_a_reprovacao(self):
+        self._com_faltas_antigas(self.matricula_bruna, 18)
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        self.client.force_login(self.professor)
+        self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})
+        self.assertEqual(self._situacao(self.matricula_bruna), 'reprovado')
+        self._salvar(aula, True, {(self.matricula_bruna, 1): 'P'})
+        self.assertEqual(self._situacao(self.matricula_bruna), 'cursando')
+
+    def test_aula_que_passa_a_realizada_conta_as_faltas_guardadas(self):
+        self._com_faltas_antigas(self.matricula_bruna, 18)
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        Falta.objects.create(aula=aula, matricula=self.matricula_bruna, periodo=1)
+        self.client.force_login(self.professor)
+        self.assertIsNone(self._situacao(self.matricula_bruna))
+        self._salvar(aula, True)
+        self.assertEqual(self._situacao(self.matricula_bruna), 'reprovado')
+
+    def test_sem_total_de_periodos_ninguem_reprova_por_falta(self):
+        Disciplina.objects.filter(id=self.disciplina.id).update(total_periodos=None)
+        self._com_faltas_antigas(self.matricula_bruna, 20)
+        aula = Aula.objects.create(turma=self.turma, data=self.DATA)
+        self.client.force_login(self.professor)
+        self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})
+        self.assertIsNone(self._situacao(self.matricula_bruna))
+
+    # ---------- Ano letivo ----------
+
+    def test_data_fora_do_ano_letivo_nao_abre_aula(self):
+        self.client.force_login(self.professor)
+        for data in ('2026-01-31', '2026-12-21', '2026-12-25', '2025-10-19'):
+            resposta = self._abrir_diario(data=data)
+            self.assertTrue(resposta.context['fora_do_ano_letivo'], data)
+            self.assertContains(resposta, 'fora do ano letivo da turma, que vai de 01/02/2026 a 20/12/2026')
+            self.assertNotContains(resposta, 'id="TabelaDiario"')
+        self.assertFalse(Aula.objects.exists())
+
+    def test_primeiro_e_ultimo_dia_do_ano_letivo_abrem(self):
+        self.client.force_login(self.professor)
+        for data in ('2026-02-01', '2026-12-20'):
+            resposta = self._abrir_diario(data=data)
+            self.assertFalse(resposta.context['fora_do_ano_letivo'], data)
+            self.assertContains(resposta, 'id="TabelaDiario"')
+
+    def test_nao_salva_falta_em_aula_fora_do_ano_letivo(self):
+        aula = Aula.objects.create(turma=self.turma, data='2026-12-25')
+        self.client.force_login(self.professor)
+        resposta = self._salvar(aula, True, {(self.matricula_bruna, 1): 'F'})
+        self.assertEqual((resposta['ok'], resposta['erro']), (False, 'Essa data está fora do ano letivo da turma.'))
+        self.assertFalse(Falta.objects.exists())
 
     def test_painel_antigo_leva_ao_diario(self):
         self.client.force_login(self.professor)
@@ -460,9 +568,9 @@ class DiarioClasseTests(TestCase):
         resposta = self.client.post(reverse('login'), {'username': 'carlos', 'password': 'senha-de-teste-1'})
         self.assertRedirects(resposta, reverse('diario-classe'), fetch_redirect_response=False)
 
-    def test_login_do_aluno_continua_no_boletim(self):
+    def test_login_do_aluno_abre_a_grade_de_horario(self):
         resposta = self.client.post(reverse('login'), {'username': '20260002', 'password': 'senha-de-teste-2'})
-        self.assertRedirects(resposta, reverse('minhas-notas'), fetch_redirect_response=False)
+        self.assertRedirects(resposta, reverse('grade-horario'), fetch_redirect_response=False)
 
     # ---------- Tela ----------
 
@@ -670,18 +778,20 @@ class TotalPeriodosDisciplinaTests(TestCase):
         cls.professor = User.objects.create_user('carlos', first_name='Carlos')
         cls.professor.groups.add(Group.objects.create(name='professor'))
 
-    def test_cadastrar_com_e_sem_total(self):
+    def test_cadastrar_exige_o_total(self):
         self.client.post(reverse('cadastrar-disciplina'), {'nome': 'Física', 'professor': self.professor.id, 'total_periodos': '72'})
-        self.client.post(reverse('cadastrar-disciplina'), {'nome': 'Química', 'professor': self.professor.id, 'total_periodos': ''})
         self.assertEqual(Disciplina.objects.get(nome='Física').total_periodos, 72)
-        self.assertIsNone(Disciplina.objects.get(nome='Química').total_periodos)
+        # Sem o total não há frequência nem reprovação por falta: a disciplina não é cadastrada.
+        resposta = self.client.post(reverse('cadastrar-disciplina'), {'nome': 'Química', 'professor': self.professor.id, 'total_periodos': ''})
+        self.assertContains(resposta, 'Informe o total de períodos da disciplina.')
+        self.assertFalse(Disciplina.objects.filter(nome='Química').exists())
 
     def test_cadastrar_recusa_total_invalido(self):
         for valor in ('0', '-5', 'abc', '3000000000'):
             self.client.post(reverse('cadastrar-disciplina'), {'nome': 'Física', 'professor': self.professor.id, 'total_periodos': valor})
         self.assertFalse(Disciplina.objects.exists())
 
-    def test_editar_preenche_e_limpa_o_total(self):
+    def test_editar_preenche_e_nao_deixa_limpar_o_total(self):
         disciplina = Disciplina.objects.create(nome='Física', professor=self.professor)
         url = reverse('editar-disciplina', args=[disciplina.id])
 
@@ -694,9 +804,83 @@ class TotalPeriodosDisciplinaTests(TestCase):
         disciplina.refresh_from_db()
         self.assertEqual((disciplina.nome, disciplina.total_periodos), ('Física', 80))
 
-        self.client.post(url, {'nome': 'Física', 'professor': self.professor.id, 'total_periodos': ''})
+        resposta = self.client.post(url, {'nome': 'Física', 'professor': self.professor.id, 'total_periodos': ''})
+        self.assertContains(resposta, 'Informe o total de períodos da disciplina.')
         disciplina.refresh_from_db()
-        self.assertIsNone(disciplina.total_periodos)
+        self.assertEqual(disciplina.total_periodos, 80)
+
+
+class GradeHorarioTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        grupo_aluno = Group.objects.create(name='aluno')
+        cls.professor = User.objects.create_user('carlos', first_name='Carlos')
+        cls.professor.groups.add(Group.objects.create(name='professor'))
+        cls.ana = User.objects.create_user('20260001', first_name='Ana')
+        cls.bruna = User.objects.create_user('20260002', first_name='Bruna')
+        for aluno in (cls.ana, cls.bruna):
+            aluno.groups.add(grupo_aluno)
+
+        from datetime import datetime
+        cls.ano = datetime.now().year
+        for nome in ('Matemática', 'Português'):
+            disciplina = Disciplina.objects.create(nome=nome, professor=cls.professor, total_periodos=72)
+            turma = Turma.objects.create(nome='1A', disciplina=disciplina, ano=cls.ano)
+            Matricula.objects.create(aluno=cls.ana, turma=turma)
+
+    def test_exige_login_e_perfil_de_aluno(self):
+        self.assertRedirects(self.client.get(reverse('grade-horario')), reverse('login'), fetch_redirect_response=False)
+        self.client.force_login(self.professor)
+        self.assertEqual(self.client.get(reverse('grade-horario')).status_code, 403)
+
+    def test_aluno_ve_a_grade_da_turma_com_as_disciplinas_dele(self):
+        self.client.force_login(self.ana)
+        resposta = self.client.get(reverse('grade-horario'))
+        self.assertContains(resposta, f'Turma 1A · {self.ano}')
+        linhas = resposta.context['linhas']
+        # 5 aulas e o intervalo, de segunda a sexta.
+        self.assertEqual(len(linhas), 6)
+        self.assertEqual([linha['intervalo'] for linha in linhas], [False, False, False, True, False, False])
+        aulas = [aula for linha in linhas if not linha['intervalo'] for aula in linha['aulas']]
+        self.assertEqual(len(aulas), 25)
+        # Só entram as disciplinas em que a Ana está matriculada; as outras aulas ficam vagas.
+        nomes = [aula['nome'] for aula in aulas]
+        self.assertEqual(set(nomes), {'Matemática', 'Português', '-'})
+        self.assertEqual((nomes.count('Matemática'), nomes.count('Português')), (5, 5))
+        # Cada aula vem com o professor da disciplina.
+        self.assertEqual({aula['professor'] for aula in aulas}, {'Carlos', ''})
+        self.assertContains(resposta, 'Prof. Carlos')
+
+    def test_aluno_sem_turma_ve_aviso(self):
+        self.client.force_login(self.bruna)
+        resposta = self.client.get(reverse('grade-horario'))
+        self.assertContains(resposta, 'Você ainda não está matriculado em nenhuma turma')
+        self.assertNotContains(resposta, 'id="TabelaGrade"')
+
+    def test_turmas_diferentes_tem_grades_diferentes(self):
+        from aluno.grade_horario import montar_grade
+        self.assertNotEqual(montar_grade('1A'), montar_grade('1B'))
+        self.assertEqual(montar_grade('1A'), montar_grade('1A'))
+
+    def test_nenhuma_disciplina_cai_no_mesmo_horario_em_duas_turmas(self):
+        from aluno.grade_horario import montar_grade
+        grades = [
+            [linha['aulas'] for linha in montar_grade(turma) if not linha['intervalo']]
+            for turma in ('1A', '1B', '2A', '2B', '3A')
+        ]
+        for aula in range(5):
+            for dia in range(5):
+                ao_mesmo_tempo = [grade[aula][dia] for grade in grades]
+                self.assertEqual(len(set(ao_mesmo_tempo)), 5, (aula, dia, ao_mesmo_tempo))
+
+    def test_semana_tem_cinco_aulas_de_matematica_e_portugues_e_tres_das_outras(self):
+        from collections import Counter
+        from aluno.grade_horario import montar_grade
+        aulas = Counter(nome for linha in montar_grade('2A') if not linha['intervalo'] for nome in linha['aulas'])
+        self.assertEqual(aulas, Counter({
+            'Matemática': 5, 'Português': 5, 'Física': 3, 'História': 3,
+            'Geografia': 3, 'Literatura': 3, 'Educação física': 3,
+        }))
 
 
 def _envio_do_cadastro(matricula, avaliacao, valor):
@@ -1026,6 +1210,53 @@ class CadastroNotasTests(TestCase):
         Matricula.objects.create(aluno=self.ana, turma=turma)
         pagina = self._abrir(turma).content.decode()
         self.assertRegex(pagina, r'<td [^>]*data-rotulo="Ana, Prova"[^>]*></td>')
+
+    def _abaixo_da_frequencia(self, matricula):
+        """2 faltas numa disciplina de 4 períodos: frequência de 50%."""
+        Disciplina.objects.filter(id=self.disciplina.id).update(total_periodos=4)
+        aula = Aula.objects.create(turma=self.turma, data='2026-09-01', realizada=True)
+        for periodo in (1, 2):
+            Falta.objects.create(aula=aula, matricula=matricula, periodo=periodo)
+
+    def test_nota_alta_nao_aprova_quem_reprovou_por_falta(self):
+        self._abaixo_da_frequencia(self.matricula_ana)
+        self._lancar(self.matricula_ana, self.prova, '9')
+        resposta = self._lancar(self.matricula_ana, self.trabalho, '9')
+        self.assertEqual((resposta['media_final'], resposta['situacao']), ('9.0', 'Reprovado por falta'))
+        self.assertFalse(resposta['exame_aberto'])
+        self.assertEqual(Nota.objects.get(matricula=self.matricula_ana).situacao, 'reprovado')
+        self.assertContains(self._abrir(), '<td class="col-situacao">Reprovado por falta</td>', html=True)
+
+    def test_reprovado_por_nota_nao_aparece_como_por_falta(self):
+        self._lancar(self.matricula_ana, self.prova, '2')
+        resposta = self._lancar(self.matricula_ana, self.trabalho, '2')
+        self.assertEqual(resposta['situacao'], 'Reprovado')
+
+    def test_reprovacao_por_falta_nao_apaga_o_exame_lancado(self):
+        nota = self._em_exame()
+        Nota.objects.filter(id=nota.id).update(nota_exame=9.0, situacao='aprovado')
+        self._abaixo_da_frequencia(self.matricula_ana)
+        self.client.post(reverse('editar-nota-avaliacao-ajax'), {
+            'aluno': self.ana.id, 'turma': self.turma.id, 'avaliacao': self.prova.id, 'valor': '6',
+        })
+        nota.refresh_from_db()
+        self.assertEqual((nota.media_final, nota.nota_exame, nota.situacao), (5.5, 9.0, 'reprovado'))
+
+    def test_tela_tem_o_botao_salvar_com_confirmacao(self):
+        # As notas digitadas só vão para o banco no Salvar, com a janela de confirmação.
+        resposta = self._abrir()
+        self.assertContains(resposta, 'id="tn-salvar"')
+        self.assertContains(resposta, 'id="modalSalvar"')
+        self.assertContains(resposta, 'data-nome="as notas de Matemática, turma 1A"')
+
+    def test_depois_de_salvar_mostra_a_mensagem(self):
+        self._abrir()
+        resposta = self.client.get(reverse('cadastrar-notas'), {'salvo': '1'}, follow=True)
+        self.assertRedirects(resposta, reverse('cadastrar-notas'))
+        self.assertContains(resposta, 'Notas salvas com sucesso!')
+
+    def test_tela_mostra_o_modo_de_calculo_da_turma(self):
+        self.assertContains(self._abrir(), '<strong>Média aritmética</strong>', html=True)
 
     def test_com_nota_faltando_nao_avisa_que_todas_foram_lancadas(self):
         self._ja_lancada(self.matricula_ana, self.prova, 8.5)
@@ -1420,14 +1651,22 @@ class CadastroNotasTests(TestCase):
                 self.assertIn(f'const MODO_CALCULO = "{modo}";', self._html_da_edicao())
 
     def test_previa_da_edicao_faz_a_conta_do_calculo(self):
-        # A prévia é JavaScript, mas essas contas também são Python válido: dá para comparar com o servidor.
+        # A prévia é JavaScript, mas essas contas também são Python válido: dá para comparar com o servidor,
+        # inclusive com notas em que a ordem das contas muda o arredondamento (5 e 95 com 0,1 e 1,2).
         html = self._html_da_edicao()
-        for modo, soma in (('soma', 'somaPontos'), ('ponderada', 'somaPercentual')):
-            with self.subTest(modo=modo):
-                conta = re.search(rf'{soma} \+= (.+);', html).group(1)
-                esperado = calcular_nota_final(Disciplina(modo_calculo=modo), [(Avaliacao(valor=3), 8)])
-                self.assertEqual(eval(conta, {'val': 8, 'peso': 3}), esperado)
-        self.assertIn('{ soma: somaPontos, ponderada: somaPercentual, aritmetica: somaSimples / count }', html)
+        total = re.search(r'const totalPorModo = \{ soma: (.+), ponderada: (.+), aritmetica: .+ \};', html)
+        for modo, soma, conta_final in (('soma', 'somaPontos', total.group(1)), ('ponderada', 'somaPercentual', total.group(2))):
+            conta = re.search(rf'{soma} \+= (.+);', html).group(1)
+            for notas in ([(3, 8)], [(5, 0.1), (95, 1.2)], [(60, 6.99), (40, 6.99)]):
+                with self.subTest(modo=modo, notas=notas):
+                    acumulado = 0
+                    for peso, val in notas:
+                        acumulado += eval(conta, {'val': val, 'peso': peso})
+                    previa = round(eval(conta_final, {soma: acumulado}), 2)
+                    esperado = calcular_nota_final(
+                        Disciplina(modo_calculo=modo), [(Avaliacao(valor=peso), val) for peso, val in notas]
+                    )
+                    self.assertEqual(previa, esperado)
 
     def test_previa_da_edicao_usa_os_limites_da_situacao(self):
         # Vale para qualquer limite escrito na prévia: precisa ser onde classificar() muda de situação.

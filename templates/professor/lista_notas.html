@@ -1,7 +1,7 @@
 {% extends 'base_sistema.html' %}
 {% load static %}
 
-{% block title %}Lista de Notas{% endblock %}
+{% block title %}Lista de notas{% endblock %}
 {% block nav_lista_notas %}active{% endblock %}
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
 
@@ -35,7 +35,7 @@
         <div class="col-lg-8">
             <div class="page-header-title">
                 <div class="d-inline">
-                    <h4>Lista de Notas</h4>
+                    <h4>Lista de notas</h4>
                 </div>
             </div>
         </div>
@@ -107,7 +107,7 @@
         <div class="card">
 
             <div class="card-header">
-                <h5>Notas dos Alunos</h5>
+                <h5>Notas dos alunos</h5>
                 <div class="card-header-right">
                     <i class="icofont icofont-spinner-alt-5"></i>
                 </div>
@@ -123,7 +123,7 @@
                 <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                     <i class="ti-info" style="font-size: 22px; color: #999;"></i>
                     <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
-                    <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para Configurar Avaliações</span></a>
+                    <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para configurar avaliações</span></a>
                 </div>
                 {% elif not alunos_notas %}
                 <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
@@ -131,6 +131,10 @@
                     <p class="text-muted mt-2 mb-0">Nenhum aluno matriculado nessa turma</p>
                 </div>
                 {% else %}
+                <div class="mb-3">
+                    <span class="text-muted">{{ turma_obj.disciplina.nome }} · Turma {{ turma_obj.nome }} · {{ turma_obj.ano }}</span>
+                    {% include "partials/modo-calculo-turma.html" with disciplina=turma_obj.disciplina %}
+                </div>
                 {% include "partials/tabela-notas.html" with modo="editar" turma_id=turma_selecionada %}
                 {% endif %}
             </div>
@@ -149,7 +153,7 @@
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
 <script src="{% static 'js/acoes-tabela.js' %}"></script>
-<script src="{% static 'js/tabela-notas.js' %}"></script>
+<script src="{% static 'js/tabela-notas.js' %}?v=3"></script>
 
 <script>
 $(document).ready(function () {

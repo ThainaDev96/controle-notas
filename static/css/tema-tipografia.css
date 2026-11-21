@@ -50,6 +50,49 @@ body.tema-tipografia .login-block h3 {
     font-weight: var(--peso-titulo);
 }
 
+/* Tamanho do título da página: um pouco menor que o do tema (20px), ainda o maior
+   texto da tela */
+body.tema-tipografia .main-body .page-wrapper .page-header-title h4 {
+    font-size: 18px;
+    /* O tema põe "capitalize", que deixa toda palavra com inicial maiúscula
+       ("Diário De Classe"). Sem isso vale o texto escrito no template. */
+    text-transform: none;
+}
+
+/* Mesmo caso dos títulos de seção do menu lateral */
+body.tema-tipografia .pcoded .pcoded-navbar .pcoded-navigatio-lavel {
+    text-transform: none;
+}
+
+
+/* ---------- 2b. Saudação e perfil no cabeçalho ---------- */
+
+/* "Bem-vindo(a), nome" com a função embaixo, ao lado da foto, no canto direito */
+body.tema-tipografia .header-navbar .navbar-wrapper .navbar-container .nav-right .user-profile .usuario-info {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1.25;
+    text-align: left;
+}
+
+body.tema-tipografia .usuario-nome,
+body.tema-tipografia .usuario-papel {
+    display: block;
+}
+
+body.tema-tipografia .usuario-nome {
+    font-size: 13px;
+    font-weight: var(--peso-texto);
+    letter-spacing: 0.3px;
+    color: #4a5068;
+}
+
+body.tema-tipografia .usuario-papel {
+    font-size: 11px;
+    font-weight: var(--peso-texto);
+    color: #6b7186;
+}
+
 
 /* ---------- 3. Texto em geral: 400 ---------- */
 
