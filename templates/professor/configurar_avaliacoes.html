@@ -1,5 +1,5 @@
 {% extends "base_sistema.html" %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}Avaliações{% endblock %}
 {% block nav_notas_menu %}pcoded-trigger{% endblock %}
@@ -82,30 +82,6 @@
     display: flex;
     justify-content: flex-end;
 }
-.card.regra-aprovacao {
-    border: 1px solid #e0e6ed;
-}
-.regra-aprovacao-titulo {
-    color: #03458F;
-    font-weight: 700;
-}
-.regra-aprovacao-lista {
-    padding-left: 18px;
-    margin-bottom: 10px;
-}
-.regra-aprovacao-lista li {
-    margin-bottom: 4px;
-}
-.card-resumo-formula .card-block {
-    padding: 15px 20px;
-}
-.formula-exemplo {
-    background-color: #f8f9fa;
-    border-radius: 6px;
-    padding: 10px 14px;
-    font-size: 0.95rem;
-    color: #333;
-}
 #aviso-modo-travado {
     font-size: 0.85rem;
 }
@@ -181,7 +157,7 @@
                                 </select>
                                 <input type="hidden" id="filtro-modo-hidden">
                                 <div id="aviso-modo-travado" class="text-muted mt-1" style="display: none;">
-                                    Essa disciplina já tem avaliações cadastradas.
+                                    Essa disciplina já foi configurada para o ano letivo.
                                 </div>
                             </div>
                         </div>
@@ -189,7 +165,7 @@
                         <div class="col-md-3 d-flex align-items-end">
                             <div class="form-group w-100">
                                 <button type="submit" class="btn-filtrar-delicado">
-                                    <span class="texto-sublinhado">Configurar</span>
+                                    <span class="texto-sublinhado" id="texto-botao-configurar">Configurar</span>
                                 </button>
                             </div>
                         </div>
@@ -232,7 +208,7 @@
                         </span>
                     {% endif %}
                 </h5>
-                {% if disciplina_atual %}
+                {% if disciplina_atual and not travada %}
                 <button type="button" id="btn-nova-avaliacao" class="btn-filtrar-delicado btn-delicado-novo">
                     <i class="ti-plus"></i> <span class="texto-sublinhado">Nova avaliação</span>
                 </button>
@@ -250,19 +226,38 @@
                     <p class="text-muted mt-2 mb-0">Não há avaliações configuradas ainda para esta disciplina.</p>
                 </div>
                 <div id="wrapper-tabela-avaliacoes" {% if sem_avaliacoes %}style="display: none;"{% endif %}>
+                    {% if travada %}
+                    <!-- CONFIGURAÇÃO TRAVADA: a tela é só de visualização -->
+                    <p class="text-muted" id="aviso-configuracao-travada" style="font-size: 13px;">
+                        <i class="ti-lock" style="color: #03458F; margin-right: 4px;" aria-hidden="true"></i>
+                        Esta disciplina já foi configurada para o ano letivo. A configuração não pode ser alterada.
+                        {% if pode_refazer %}
+                        Como ainda não há nota lançada, dá para apagar tudo e configurar de novo em <strong>Refazer configuração</strong>.
+                        {% endif %}
+                    </p>
+                    {% endif %}
                     <div class="table-responsive dt-responsive">
                         <table id="TabelaAvaliacoes" class="table table-striped table-bordered">
                             <thead>
                                 <tr>
                                     <th>Nome</th>
                                     <th class="col-tipo">Tipo</th>
+                                    {% if disciplina_atual.modo_calculo != 'aritmetica' %}
                                     <th>{{ disciplina_atual.rotulo_valor }}</th>
-                                    <th class="col-acoes">Ações</th>
+                                    {% endif %}
+                                    {% if not travada %}<th class="col-acoes">Ações</th>{% endif %}
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for avaliacao in avaliacoes %}
                                 <tr>
+                                    {% if travada %}
+                                    <td>{{ avaliacao.nome }}</td>
+                                    <td>{{ avaliacao.get_tipo_display }}</td>
+                                    {% if disciplina_atual.modo_calculo != 'aritmetica' %}
+                                    <td class="editavel-avaliacao" data-campo="valor">{{ avaliacao.valor|default_if_none:"" }}</td>
+                                    {% endif %}
+                                    {% else %}
                                     <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="nome">{{ avaliacao.nome }}</td>
                                     <td>
                                         <div class="dropdown">
@@ -274,7 +269,9 @@
                                             </div>
                                         </div>
                                     </td>
+                                    {% if disciplina_atual.modo_calculo != 'aritmetica' %}
                                     <td contenteditable="true" class="editavel-avaliacao" data-id="{{ avaliacao.id }}" data-campo="valor">{{ avaliacao.valor|default_if_none:"" }}</td>
+                                    {% endif %}
                                     <td>
                                         {% url 'deletar-avaliacao' avaliacao.id as url_deletar %}
                                         <div class="acoes-disciplina">
@@ -283,6 +280,7 @@
                                             </a>
                                         </div>
                                     </td>
+                                    {% endif %}
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -292,11 +290,21 @@
                         <span id="indicador-preenchimento"></span>
                     </div>
 
+                    {% if not travada %}
                     <!-- BOTÕES -->
                     <div>
+                        <button type="button" id="btn-cancelar-avaliacoes" class="btn-filtrar-delicado btn-delicado-vermelho" style="float: right; margin-right: 16px;"><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></button>
                         <button type="button" id="btn-salvar-avaliacoes" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"
                             data-nome="as avaliações de {{ disciplina_atual.nome }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
                     </div>
+                    {% elif pode_refazer %}
+                    <!-- REFAZER: apaga a configuração inteira, só enquanto não há nota lançada -->
+                    <form method="post" action="{% url 'refazer-configuracao' %}" id="form-refazer-configuracao">
+                        {% csrf_token %}
+                        <input type="hidden" name="disciplina" value="{{ disciplina_atual.id }}">
+                        <button type="button" id="btn-refazer-configuracao" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"><i class="ti-reload"></i> <span class="texto-sublinhado">Refazer configuração</span></button>
+                    </form>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -304,26 +312,6 @@
     </div>
 </div>
 <!-- FIM CARD DA TABELA -->
-
-<!-- REGRA DE APROVAÇÃO E RESUMO DO CÁLCULO (abaixo da tabela) -->
-{% if resumo_exemplo %}
-<div class="row">
-    <div class="col-sm-12">
-        {% include "partials/caixa-regra-aprovacao.html" %}
-    </div>
-</div>
-<div class="row">
-    <div class="col-sm-12">
-        <div class="card card-resumo-formula">
-            <div class="card-block">
-                <h6 class="regra-aprovacao-titulo"><i class="ti-calculator"></i> Como a fórmula do modo "{{ disciplina_atual.get_modo_calculo_display }}" funciona</h6>
-                <p class="text-muted mb-2">Exemplo com notas fictícias, usando as avaliações cadastradas para {{ disciplina_atual.nome }}:</p>
-                <div class="formula-exemplo">{{ resumo_exemplo.formula_texto }}</div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- Modal de Confirmação -->
 {% include "partials/modal-confirmar-exclusao.html" %}
@@ -341,12 +329,95 @@
 <script>
 var ROTULO_VALOR = "{{ disciplina_atual.rotulo_valor|escapejs }}";
 var MODO_CALCULO = "{{ disciplina_atual.modo_calculo|escapejs }}";
+// Limite da soma dos pesos no modo da disciplina (10 na soma, 100 na ponderada); vazio na aritmética
+var LIMITE_DOS_PESOS = parseFloat('{{ limite_dos_pesos|default_if_none:""|unlocalize }}');
+var MAXIMO_AVALIACOES = {{ maximo_avaliacoes }};
+// Na média aritmética a tabela não tem a coluna do peso: ele não entra na conta.
+var TEM_COLUNA_DE_PESO = MODO_CALCULO !== 'aritmetica';
 var erroPadrao = 'Não foi possível salvar. Recarregue a página e tente de novo.';
-// Mudança feita na tabela e ainda não salva: só vai para o banco no Salvar
-var alterado = false;
+// Como a tabela estava ao abrir a tela e se o Salvar acabou de gravar: há mudança não salva quando
+// a tabela está diferente do começo. Tirar com a lixeira o que foi acrescentado volta ao começo.
+var estadoInicial = '';
+var salvou = false;
 
 function formatarPt(numero) {
     return numero.toFixed(1).replace('.', ',');
+}
+
+// Peso digitado, aceitando vírgula ou ponto: em branco vale 0; o que não é número vira NaN.
+function lerPeso(texto) {
+    texto = (texto || '').trim().replace(',', '.');
+    return texto === '' ? 0 : Number(texto);
+}
+
+// Na soma e na ponderada toda avaliação precisa de peso. Na média aritmética o peso não entra na conta.
+function faltaPeso(texto) {
+    return !isNaN(LIMITE_DOS_PESOS) && (texto || '').trim() === '';
+}
+
+// Estado da tabela: tudo o que o Salvar gravaria. Serve para saber se há mudança ainda não salva.
+function estadoDaTabela() {
+    var partes = [];
+    var $tabela = $('#TabelaAvaliacoes');
+    if (!$tabela.length || !$.fn.DataTable.isDataTable($tabela)) {
+        return '';
+    }
+    $($tabela.DataTable().rows({ order: 'index' }).nodes()).each(function () {
+        var $linha = $(this);
+        if ($linha.is('#linha-nova-avaliacao')) {
+            // A linha em digitação só conta se já tiver alguma coisa escrita.
+            var digitado = ($linha.find('#novo-av-nome').val() || '').trim() + ($linha.find('#novo-av-valor').val() || '').trim();
+            if (digitado) partes.push('digitando:' + digitado);
+            return;
+        }
+        partes.push([
+            $linha.find('[data-campo="nome"]').attr('data-id') || 'nova',
+            $linha.find('[data-campo="nome"]').text().trim(),
+            $linha.find('.tipo-dropdown-toggle').attr('data-valor'),
+            $linha.find('[data-campo="valor"]').text().trim()
+        ].join('|'));
+    });
+    return partes.join(';');
+}
+
+// Linhas já confirmadas na tabela, de todas as páginas (a linha que ainda está sendo digitada não conta).
+function linhasConfirmadas() {
+    var tabela = $('#TabelaAvaliacoes').DataTable();
+    return $(tabela.rows().nodes()).not('#linha-nova-avaliacao');
+}
+
+// Soma dos pesos das linhas confirmadas, sem contar a célula indicada (a que está sendo corrigida).
+function somaDosPesos($semEsta) {
+    var soma = 0;
+    linhasConfirmadas().find('.editavel-avaliacao[data-campo="valor"]').not($semEsta).each(function () {
+        var valor = lerPeso($(this).text());
+        if (!isNaN(valor)) soma += valor;
+    });
+    return soma;
+}
+
+// O que impede esse peso de entrar: não ser número de 0 para cima, ou fazer a soma passar do limite do modo.
+function erroNoPeso(valor, somaDasOutras) {
+    if (isNaN(valor) || valor < 0) {
+        return 'O peso deve ser um número de 0 para cima.';
+    }
+    // Na média ponderada o peso é uma porcentagem inteira (20%, 35%...); quanto cada avaliação vale
+    // fica a critério do professor, desde que os pesos fechem 100%.
+    if (MODO_CALCULO === 'ponderada' && (valor <= 0 || !Number.isInteger(valor))) {
+        return 'Na média ponderada o peso de cada avaliação é uma porcentagem inteira, a partir de 1% (por exemplo, 20%).';
+    }
+    // Na média aritmética não há soma de pesos: o valor de cada avaliação vai de 0 a 10, como a nota.
+    if (MODO_CALCULO === 'aritmetica' && valor > 10) {
+        return 'Na média aritmética o valor de cada avaliação vai de 0 a 10.';
+    }
+    var total = Math.round((somaDasOutras + valor) * 100) / 100;
+    if (!isNaN(LIMITE_DOS_PESOS) && total > LIMITE_DOS_PESOS) {
+        var unidade = MODO_CALCULO === 'ponderada' ? '%' : ' pontos';
+        var falta = Math.round((LIMITE_DOS_PESOS - somaDasOutras) * 100) / 100;
+        return 'A soma dos pesos não pode passar de ' + formatarPt(LIMITE_DOS_PESOS) + unidade + '. ' +
+            (falta > 0 ? 'Ainda cabem ' + formatarPt(falta) + unidade + '.' : 'Com esse valor ficaria em ' + formatarPt(total) + unidade + '.');
+    }
+    return null;
 }
 
 function atualizarIndicador() {
@@ -354,16 +425,11 @@ function atualizarIndicador() {
     if (!$indicador.length) return;
 
     if (MODO_CALCULO === 'aritmetica') {
-        $indicador.text('0 a 10 cada');
+        $indicador.text('Cada avaliação vale de 0 a 10');
         return;
     }
 
-    var soma = 0;
-    $('#TabelaAvaliacoes tbody tr').not('#linha-nova-avaliacao').each(function () {
-        var texto = $(this).find('.editavel-avaliacao[data-campo="valor"]').text().trim().replace(',', '.');
-        var valor = parseFloat(texto);
-        if (!isNaN(valor)) soma += valor;
-    });
+    var soma = somaDosPesos();
 
     if (MODO_CALCULO === 'soma') {
         $indicador.text(formatarPt(soma) + ' / 10,0');
@@ -397,6 +463,8 @@ function aplicarTravaModoConformeDisciplina() {
     } else {
         destravarModo();
     }
+    // Disciplina já configurada só abre para ver: o botão diz isso.
+    $('#texto-botao-configurar').text($opt.val() && temAvaliacao ? 'Visualizar' : 'Configurar');
 }
 
 $('#filtro-disciplina').on('change', function () {
@@ -417,6 +485,7 @@ $(document).ready(function () {
     });
 
     atualizarIndicador();
+    estadoInicial = estadoDaTabela();
 
     // A linha de digitação pode estar fora da tela (outra página da tabela ou escondida pela busca):
     // procura em todas as linhas do DataTables.
@@ -426,6 +495,19 @@ $(document).ready(function () {
 
     $('#btn-nova-avaliacao').on('click', function () {
         if (linhaDeDigitacao().length) return;
+
+        if (linhasConfirmadas().length >= MAXIMO_AVALIACOES) {
+            avisar('Cada disciplina pode ter no máximo ' + MAXIMO_AVALIACOES + ' avaliações.');
+            return;
+        }
+
+        // Com os pesos já fechando o total do modo, não cabe outra avaliação: o aviso diz o que fazer.
+        if (!isNaN(LIMITE_DOS_PESOS) && linhasConfirmadas().length &&
+                Math.round(somaDosPesos() * 100) / 100 >= LIMITE_DOS_PESOS) {
+            avisar('Os pesos já fecham ' + (MODO_CALCULO === 'ponderada' ? '100%' : '10 pontos') +
+                '. Para incluir outra avaliação, diminua o peso de alguma das que já estão na tabela.');
+            return;
+        }
 
         if ($('#wrapper-vazio-avaliacoes').is(':visible')) {
             $('#wrapper-vazio-avaliacoes').hide();
@@ -445,7 +527,10 @@ $(document).ready(function () {
                     '</div>' +
                 '</div>' +
             '</td>' +
-            '<td><input type="number" step="0.01" class="form-control form-control-sm" id="novo-av-valor" placeholder="' + ROTULO_VALOR + '"></td>' +
+            (TEM_COLUNA_DE_PESO
+                ? '<td><input type="number" step="' + (MODO_CALCULO === 'ponderada' ? 1 : 0.01) + '" min="0" max="' + LIMITE_DOS_PESOS + '"' +
+                    ' class="form-control form-control-sm" id="novo-av-valor" placeholder="' + ROTULO_VALOR + '"></td>'
+                : '') +
             '<td>' +
                 '<div class="acoes-disciplina">' +
                     '<a href="#" class="icone-acao" id="btn-salvar-nova-avaliacao" title="Confirmar"><i class="ti-check"></i></a>' +
@@ -475,7 +560,14 @@ $(document).ready(function () {
         var valor = $digitacao.find('#novo-av-valor').val();
 
         if (!nome) {
-            alert('Informe o nome da avaliação.');
+            avisar('Informe o nome da avaliação.');
+            return false;
+        }
+
+        // A avaliação não entra na tabela sem peso, nem se o peso dela fizer a soma passar do limite.
+        var erro = faltaPeso(valor) ? 'Informe o peso da avaliação.' : erroNoPeso(lerPeso(valor), somaDosPesos());
+        if (erro) {
+            avisar(erro);
             return false;
         }
 
@@ -493,7 +585,7 @@ $(document).ready(function () {
                     '</div>' +
                 '</div>' +
             '</td>' +
-            '<td contenteditable="true" class="editavel-avaliacao" data-campo="valor"></td>' +
+            (TEM_COLUNA_DE_PESO ? '<td contenteditable="true" class="editavel-avaliacao" data-campo="valor"></td>' : '') +
             '<td>' +
                 '<div class="acoes-disciplina">' +
                     '<a href="#" class="icone-acao btn-remover-nova-avaliacao" title="Excluir"><i class="ti-trash"></i></a>' +
@@ -505,7 +597,6 @@ $(document).ready(function () {
         $linha.find('[data-campo="nome"]').text(nome);
         $linha.find('[data-campo="valor"]').text(valor);
         table.row.add($linha).draw(false);
-        alterado = true;
         atualizarIndicador();
         return true;
     }
@@ -529,6 +620,26 @@ $(document).ready(function () {
     // Salvar abre a confirmação. Uma linha nova ainda sem o check é confirmada antes.
     $('#btn-salvar-avaliacoes').on('click', function () {
         if (linhaDeDigitacao().length && !confirmarNovaAvaliacao()) {
+            return;
+        }
+        // A configuração só é salva completa. Primeiro cada peso (a célula pode ainda estar aberta, sem ter
+        // passado pela conferência): informado e válido no modo da disciplina...
+        var erroDoPeso = null;
+        linhasConfirmadas().find('.editavel-avaliacao[data-campo="valor"]').each(function () {
+            if (erroDoPeso) return;
+            erroDoPeso = faltaPeso($(this).text()) ? 'Informe o peso de todas as avaliações.'
+                : erroNoPeso(lerPeso($(this).text()), 0);
+        });
+        if (erroDoPeso) {
+            avisar(erroDoPeso);
+            return;
+        }
+        // ...e depois a soma, fechando o total do modo (10 pontos na soma, 100% na ponderada).
+        if (!isNaN(LIMITE_DOS_PESOS) && linhasConfirmadas().length &&
+                Math.round(somaDosPesos() * 100) / 100 !== LIMITE_DOS_PESOS) {
+            avisar(MODO_CALCULO === 'ponderada'
+                ? 'Na média ponderada os pesos precisam fechar 100%. Hoje somam ' + formatarPt(somaDosPesos()) + '%.'
+                : 'Na soma dos pesos os pesos precisam fechar 10 pontos. Hoje somam ' + formatarPt(somaDosPesos()) + '.');
             return;
         }
         $('#nome-item-salvar').text($(this).data('nome'));
@@ -561,7 +672,9 @@ $(document).ready(function () {
             if (id) {
                 dados['nome_' + id] = nome;
                 dados['tipo_' + id] = tipo;
-                dados['valor_' + id] = valor;
+                if (TEM_COLUNA_DE_PESO) {
+                    dados['valor_' + id] = valor;
+                }
             }
         });
 
@@ -570,28 +683,33 @@ $(document).ready(function () {
         $.post("{% url 'salvar-avaliacoes-ajax' %}", $.param(dados, true)).done(function (resp) {
             if (resp && resp.ok) {
                 // Recarrega a mesma configuração: a tela volta com o que ficou gravado e a mensagem de sucesso.
-                alterado = false;
+                salvou = true;
                 window.location.href = "{% url 'configurar-avaliacoes' %}";
             } else {
-                $('#modalSalvar').modal('hide');
                 $botao.prop('disabled', false);
-                alert((resp && resp.erro) || erroPadrao);
+                avisar((resp && resp.erro) || erroPadrao);
             }
         }).fail(function () {
-            $('#modalSalvar').modal('hide');
             $botao.prop('disabled', false);
-            alert(erroPadrao);
+            avisar(erroPadrao);
         });
     });
 });
 
-// Digitar na tabela só muda a tela; o Salvar grava.
-$(document).on('input', '.editavel-avaliacao, #linha-nova-avaliacao input', function () {
-    alterado = true;
+// Ao entrar na célula do peso, guarda o que estava nela: se o novo valor não puder ficar, ela volta a isso.
+$(document).on('focus', '.editavel-avaliacao[data-campo="valor"]', function () {
+    $(this).data('antes', $(this).text().trim());
 });
 
 $(document).on('blur', '.editavel-avaliacao', function () {
     if ($(this).data('campo') === 'valor') {
+        var $celula = $(this);
+        var erro = faltaPeso($celula.text()) ? 'Informe o peso da avaliação.'
+            : erroNoPeso(lerPeso($celula.text()), somaDosPesos($celula));
+        if (erro) {
+            $celula.text($celula.data('antes') || '');
+            avisar(erro);
+        }
         atualizarIndicador();
     }
 });
@@ -606,15 +724,35 @@ $(document).on('click', '.tipo-dropdown-item', function (e) {
     $toggle.attr('data-valor', $item.data('valor'));
     $menu.find('.tipo-dropdown-item').removeClass('active');
     $item.addClass('active');
-    alterado = true;
 });
 
-// Sair da página com mudança ainda não salva: o navegador pede confirmação
-window.addEventListener('beforeunload', function (evento) {
-    if (alterado) {
-        evento.preventDefault();
-        evento.returnValue = '';
+// Sair da página com mudança ainda não salva: o sistema pergunta antes (ver base_sistema.html)
+window.alteracoesNaoSalvas = function () {
+    return !salvou && estadoDaTabela() !== estadoInicial;
+};
+
+// Refazer configuração: pergunta antes, porque apaga todas as avaliações da disciplina.
+$('#btn-refazer-configuracao').on('click', function () {
+    perguntar({
+        titulo: 'Refazer a configuração?',
+        texto: 'Todas as avaliações dessa disciplina serão apagadas e você vai escolher o modo de cálculo de novo.',
+        voltar: 'Manter como está',
+        confirmar: 'Sim, refazer'
+    }, function () {
+        document.getElementById('form-refazer-configuracao').submit();
+    });
+});
+
+// Cancelar: desfaz o que foi mudado na tabela e ainda não salvo, voltando ao que está gravado.
+$('#btn-cancelar-avaliacoes').on('click', function () {
+    if (!window.alteracoesNaoSalvas()) {
+        return;
     }
+    perguntarAntesDeCancelar(function () {
+        salvou = true;
+        // Volta para a escolha da disciplina, e não para a disciplina que estava sendo configurada.
+        window.location.href = "{% url 'configurar-avaliacoes' %}?limpar=1";
+    });
 });
 
 $('.table-responsive').on('show.bs.dropdown', function () {

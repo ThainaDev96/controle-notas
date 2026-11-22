@@ -230,7 +230,9 @@ class Command(BaseCommand):
                     "last_name": "Souza",
                     "email": "carlos.souza@dombosco.com",
                 },
-                "disciplinas": {"Matemática": "ponderada", "Física": "ponderada", "Educação física": None},
+                # Educação física e Artes ficam de propósito sem configuração: são as disciplinas para
+                # configurar à mão (o modo de cálculo e as avaliações) em testes e apresentações.
+                "disciplinas": {"Matemática": "ponderada", "Física": "ponderada", "Educação física": None, "Artes": None},
             },
             {
                 "professor": {

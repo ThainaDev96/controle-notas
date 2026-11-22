@@ -1,0 +1,17 @@
+{# Janela de aviso do sistema, no lugar do alert() do navegador. Quem abre é a função avisar(), no base_sistema.html. #}
+<div class="modal fade" id="modalAviso" tabindex="-1" role="dialog" aria-labelledby="modalAvisoTitulo">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAvisoTitulo">Atenção</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalAvisoTexto"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn-filtrar-delicado" data-dismiss="modal"><i class="ti-check"></i> <span class="texto-sublinhado">Entendi</span></button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -105,33 +105,66 @@ class RecalculoAoMudarPesoTests(TestCase):
     def _mudar_peso(self, avaliacao, valor):
         return self.client.post(reverse('editar-avaliacao-ajax'), {'id': avaliacao.id, 'campo': 'valor', 'valor': valor}).json()
 
+    # A configuração salva vale para o ano letivo: o peso não muda mais e, com isso, nenhuma média
+    # é recalculada por causa de peso.
+
+    def test_peso_de_avaliacao_salva_nao_muda_e_a_mf_fica_como_esta(self):
+        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado', nota_exame=8.0)
+        resposta = self._mudar_peso(self.prova, '20')
+        self.assertEqual((resposta['ok'], resposta['erro']),
+                         (False, 'Essa disciplina já foi configurada para o ano letivo. A configuração não pode ser alterada.'))
+        self.prova.refresh_from_db()
+        self.assertEqual(self.prova.valor, 40)
+        self.assertEqual(self._estado(nota), (7.0, 'aprovado', 8.0))
+
+    def test_tela_antiga_de_editar_avaliacao_tambem_nao_muda_o_peso(self):
+        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
+        resposta = self.client.post(reverse('editar-avaliacao', args=[self.prova.id]), {
+            'nome': 'Prova', 'tipo': 'prova', 'valor': '20', 'disciplina': self.disciplina.id,
+        }, follow=True)
+        self.assertContains(resposta, 'A configuração não pode ser alterada.')
+        self.prova.refresh_from_db()
+        self.assertEqual((self.prova.nome, self.prova.valor), ('Prova', 40))
+        self.assertEqual(self._estado(nota), (7.0, 'aprovado', None))
+
+    def test_avaliacao_salva_nao_e_excluida(self):
+        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
+        resposta = self.client.get(reverse('deletar-avaliacao', args=[self.prova.id]), follow=True)
+        self.assertContains(resposta, 'A configuração não pode ser alterada.')
+        self.assertTrue(Avaliacao.objects.filter(id=self.prova.id).exists())
+        self.assertEqual(nota.notaavaliacao_set.count(), 2)
+
+    def test_nao_entra_avaliacao_nova_em_disciplina_configurada(self):
+        resposta = self.client.post(reverse('cadastrar-avaliacao-ajax'), {
+            'nome': 'Extra', 'tipo': 'prova', 'valor': '0', 'disciplina': self.disciplina.id,
+        }).json()
+        self.assertFalse(resposta['ok'])
+        self.assertIn('A configuração não pode ser alterada.', resposta['erro'])
+        self.assertEqual(self.disciplina.avaliacao_set.count(), 2)
+
+    def test_refazer_apaga_a_configuracao_enquanto_nao_ha_nota(self):
+        resposta = self.client.post(reverse('refazer-configuracao'), {'disciplina': self.disciplina.id}, follow=True)
+        self.assertContains(resposta, 'Configuração apagada.')
+        self.disciplina.refresh_from_db()
+        self.assertIsNone(self.disciplina.modo_calculo)
+        self.assertFalse(self.disciplina.avaliacao_set.exists())
+
+    def test_refazer_e_recusado_depois_da_primeira_nota(self):
+        nota = self._aluno('ana', 10, None)
+        resposta = self.client.post(reverse('refazer-configuracao'), {'disciplina': self.disciplina.id}, follow=True)
+        self.assertContains(resposta, 'A configuração não pode mais ser refeita.')
+        self.assertEqual(self.disciplina.avaliacao_set.count(), 2)
+        self.assertEqual(nota.notaavaliacao_set.count(), 1)
+
+    def test_refazer_exige_professor(self):
+        self.client.logout()
+        resposta = self.client.post(reverse('refazer-configuracao'), {'disciplina': self.disciplina.id})
+        self.assertRedirects(resposta, reverse('login'), fetch_redirect_response=False)
+        self.assertEqual(self.disciplina.avaliacao_set.count(), 2)
+
     def _estado(self, nota):
         nota.refresh_from_db()
         return nota.media_final, nota.situacao, nota.nota_exame
-
-    def test_mudar_o_peso_recalcula_a_mf_e_a_situacao(self):
-        # 10 x 40% + 5 x 60% = 7, e com peso 20: 10 x 20% + 5 x 60% = 5
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        self.assertTrue(self._mudar_peso(self.prova, '20')['ok'])
-        self.assertEqual(self._estado(nota), (5.0, 'exame', None))
-
-    def test_quando_a_mf_muda_o_exame_fica_e_decide_a_situacao(self):
-        # A MF 5 cai no exame, e com o exame 8 já lançado: (5 + 8) / 2 = 6,5
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado', nota_exame=8.0)
-        self._mudar_peso(self.prova, '20')
-        self.assertEqual(self._estado(nota), (5.0, 'aprovado', 8.0))
-
-    def test_exame_baixo_ja_lancado_reprova_quando_a_mf_muda(self):
-        # (5 + 6) / 2 = 5,5, abaixo de 6
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado', nota_exame=6.0)
-        self._mudar_peso(self.prova, '20')
-        self.assertEqual(self._estado(nota), (5.0, 'reprovado', 6.0))
-
-    def test_quem_fez_o_exame_continua_decidido_por_ele_com_mf_abaixo_de_4(self):
-        # 10 x 10% + 3 x 60% = 2,8, mas quem já fez o exame não volta para as notas: (2,8 + 10) / 2 = 6,4
-        nota = self._aluno('ana', 10, 3, media_final=5.8, situacao='aprovado', nota_exame=10.0)
-        self._mudar_peso(self.prova, '10')
-        self.assertEqual(self._estado(nota), (2.8, 'aprovado', 10.0))
 
     def test_quando_a_mf_nao_muda_o_exame_fica(self):
         # 0 x 40% + 10 x 60% = 6, e com peso 20 continua 6
@@ -143,13 +176,6 @@ class RecalculoAoMudarPesoTests(TestCase):
         nota = self._aluno('ana', 10, None, media_final=None, situacao='cursando')
         self._mudar_peso(self.prova, '20')
         self.assertEqual(self._estado(nota), (None, 'cursando', None))
-
-    def test_salvar_o_mesmo_peso_nao_recalcula(self):
-        # A tabela de Configurar Avaliações salva ao sair da célula, mesmo sem mudança.
-        nota = self._aluno('ana', 10, 5, media_final=9.9, situacao='aprovado', nota_exame=8.0)
-        for valor in ('40', '40.0'):
-            self.assertTrue(self._mudar_peso(self.prova, valor)['ok'])
-            self.assertEqual(self._estado(nota), (9.9, 'aprovado', 8.0))
 
     def test_mudar_o_nome_nao_recalcula(self):
         nota = self._aluno('ana', 10, 5, media_final=9.9, situacao='aprovado', nota_exame=8.0)
@@ -220,20 +246,6 @@ class RecalculoAoMudarPesoTests(TestCase):
         self._mudar_peso(self.prova, '20')
         self.assertEqual(self._estado(nota), (7.0, 'aprovado', 8.0))
 
-    def test_turma_ativa_de_outro_ano_tambem_recalcula(self):
-        turma = Turma.objects.create(nome='1B', disciplina=self.disciplina, ano=2025)
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado', turma=turma)
-        self._mudar_peso(self.prova, '20')
-        self.assertEqual(self._estado(nota), (5.0, 'exame', None))
-
-    def test_peso_com_virgula_e_salvo_e_recalcula(self):
-        # 10 x 22,5% + 5 x 60% = 5,25
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        self.assertTrue(self._mudar_peso(self.prova, ' 22,5 ')['ok'])
-        self.prova.refresh_from_db()
-        self.assertEqual(self.prova.valor, 22.5)
-        self.assertEqual(self._estado(nota), (5.25, 'exame', None))
-
     def test_peso_invalido_e_recusado_sem_recalcular(self):
         nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado', nota_exame=8.0)
         for valor in ('abc', 'nan', 'inf', '-1'):
@@ -270,49 +282,6 @@ class RecalculoAoMudarPesoTests(TestCase):
         }).json()
         self.assertFalse(resposta['ok'])
         self.assertFalse(Avaliacao.objects.filter(nome='Extra').exists())
-
-    def test_peso_zero_nao_conta_na_mf(self):
-        # 5 x 60% = 3
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        self.assertTrue(self._mudar_peso(self.prova, '0')['ok'])
-        self.assertEqual(self._estado(nota), (3.0, 'reprovado', None))
-
-    def test_se_o_recalculo_falhar_o_peso_nao_muda(self):
-        self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        with mock.patch('aluno.views.calcular_nota_final', side_effect=RuntimeError):
-            with self.assertRaises(RuntimeError):
-                self._mudar_peso(self.prova, '20')
-        self.prova.refresh_from_db()
-        self.assertEqual(self.prova.valor, 40)
-
-    def test_media_ponderada_tambem_recalcula(self):
-        disciplina = Disciplina.objects.create(nome='Física', professor=self.professor, modo_calculo='ponderada')
-        turma = Turma.objects.create(nome='1B', disciplina=disciplina, ano=2026)
-        prova = Avaliacao.objects.create(nome='Prova', valor=60, disciplina=disciplina)
-        trabalho = Avaliacao.objects.create(nome='Trabalho', valor=40, disciplina=disciplina)
-        # 10 x 60% + 5 x 40% = 8, e com peso 30: 10 x 30% + 5 x 40% = 5
-        nota = self._aluno('ana', 10, 5, media_final=8.0, situacao='aprovado', turma=turma, avaliacoes=(prova, trabalho))
-        self._mudar_peso(prova, '30')
-        self.assertEqual(self._estado(nota), (5.0, 'exame', None))
-
-    def test_na_soma_dos_pesos_mudar_o_peso_nao_muda_a_mf(self):
-        # A MF é a soma das notas, 10 + 5 = 15, com qualquer peso.
-        disciplina = Disciplina.objects.create(nome='Física', professor=self.professor, modo_calculo='soma')
-        turma = Turma.objects.create(nome='1B', disciplina=disciplina, ano=2026)
-        avaliacoes = (
-            Avaliacao.objects.create(nome='Prova', valor=4, disciplina=disciplina),
-            Avaliacao.objects.create(nome='Trabalho', valor=6, disciplina=disciplina),
-        )
-        nota = self._aluno('ana', 10, 5, media_final=15.0, situacao='aprovado', turma=turma, avaliacoes=avaliacoes)
-        self.assertTrue(self._mudar_peso(avaliacoes[0], '2')['ok'])
-        self.assertEqual(self._estado(nota), (15.0, 'aprovado', None))
-
-    def test_tela_de_editar_avaliacao_tambem_recalcula(self):
-        nota = self._aluno('ana', 10, 5, media_final=7.0, situacao='aprovado')
-        self.client.post(reverse('editar-avaliacao', args=[self.prova.id]), {
-            'nome': 'Prova', 'tipo': 'prova', 'valor': '20', 'disciplina': self.disciplina.id,
-        })
-        self.assertEqual(self._estado(nota), (5.0, 'exame', None))
 
     def test_tela_de_editar_avaliacao_sem_mudar_o_peso_nao_recalcula(self):
         nota = self._aluno('ana', 10, 5, media_final=9.9, situacao='aprovado', nota_exame=8.0)
@@ -883,12 +852,6 @@ class GradeHorarioTests(TestCase):
         }))
 
 
-def _envio_do_cadastro(matricula, avaliacao, valor):
-    """O que a célula do Cadastro de Notas envia ao salvar."""
-    return {
-        'aluno': matricula.aluno_id, 'turma': matricula.turma_id, 'avaliacao': avaliacao.id,
-        'valor': valor, 'so_lancar': '1',
-    }
 
 
 class CadastroNotasTests(TestCase):
@@ -1206,7 +1169,7 @@ class CadastroNotasTests(TestCase):
         # Sem campo, sem cadeado e sem mostrar limite, mesmo em disciplina de soma dos pesos.
         disciplina = Disciplina.objects.create(nome='Física', professor=self.professor, modo_calculo='soma')
         turma = Turma.objects.create(nome='1B', disciplina=disciplina, ano=2026)
-        Avaliacao.objects.create(nome='Prova', valor=3, disciplina=disciplina)
+        Avaliacao.objects.create(nome='Prova', valor=10, disciplina=disciplina)
         Matricula.objects.create(aluno=self.ana, turma=turma)
         pagina = self._abrir(turma).content.decode()
         self.assertRegex(pagina, r'<td [^>]*data-rotulo="Ana, Prova"[^>]*></td>')
@@ -1400,14 +1363,16 @@ class CadastroNotasTests(TestCase):
         # 10 + 5, sem o peso: a MF pode passar de 10
         self.assertEqual((resposta['media_final'], resposta['situacao']), ('15.0', 'Aprovado'))
 
-    def test_exemplo_da_configuracao_usa_nota_de_0_a_10(self):
-        disciplina = Disciplina.objects.create(nome='Física', professor=self.professor, modo_calculo='soma')
-        Avaliacao.objects.create(nome='Prova', valor=4, disciplina=disciplina)
-        Avaliacao.objects.create(nome='Trabalho', valor=6, disciplina=disciplina)
-
-        resposta = self.client.post(reverse('configurar-avaliacoes'), {'disciplina': disciplina.id, 'modo': 'soma'}, follow=True)
-
-        self.assertEqual(resposta.context['resumo_exemplo']['formula_texto'], '8,0 + 8,0 = 16,0')
+    def test_configurar_avaliacoes_nao_mostra_regra_de_aprovacao_nem_exemplo_da_formula(self):
+        # Esses textos saíram da interface (a regra e as contas vão no PDF do boletim).
+        for nome, modo, pesos in (('Química', 'ponderada', (60, 40)), ('Física II', 'soma', (4, 6)), ('Artes', 'aritmetica', (None, None))):
+            disciplina = Disciplina.objects.create(nome=nome, professor=self.professor, modo_calculo=modo)
+            for n, peso in enumerate(pesos):
+                Avaliacao.objects.create(nome=f'A{n}', valor=peso, disciplina=disciplina)
+            resposta = self.client.post(reverse('configurar-avaliacoes'), {'disciplina': disciplina.id, 'modo': modo}, follow=True)
+            self.assertContains(resposta, 'id="TabelaAvaliacoes"')
+            for texto in ('Regra de aprovação', 'Como a fórmula do modo', 'Exemplo com as avaliações'):
+                self.assertNotContains(resposta, texto, msg_prefix=modo)
 
     def test_lista_aceita_de_0_a_10_mesmo_com_peso_menor(self):
         avaliacao, matricula = self._avaliacao_de_peso_3()
@@ -1695,11 +1660,14 @@ class CadastroNotasTests(TestCase):
         url = reverse('editar-nota', args=[nota.id])
         campo = f'nota_avaliacao_{self.prova.id}'
 
-        self.client.post(url, {campo: str(5.0 + limite - 0.0001)})
+        # A nota tem no máximo duas casas: a menor mudança possível (0,01) tem que passar do limite.
+        self.assertLess(limite, 0.01)
+
+        self.client.post(url, {campo: '5.00'})
         nota.refresh_from_db()
         self.assertEqual((nota.media_final, nota.situacao), (5.0, 'aprovado'))
 
-        self.client.post(url, {campo: str(5.0 + limite + 0.0001)})
+        self.client.post(url, {campo: '5.01'})
         nota.refresh_from_db()
         # Recalculou: sem a nota do Trabalho não há média
         self.assertEqual((nota.media_final, nota.situacao), (None, 'cursando'))

@@ -29,6 +29,7 @@ MODOS = {
     'História': 'aritmetica',
     'Geografia': 'aritmetica',
     'Educação física': None,
+    'Artes': None,
 }
 
 QTD_AVALIACOES = {
@@ -143,8 +144,10 @@ class DistribuicaoTests(TestCase):
                     esperado[total] += 2
                 self.assertEqual(lancadas_por_aluno(turma, disciplina), esperado, (turma, disciplina))
 
-    def test_disciplina_sem_configuracao_nao_tem_nota_em_nenhuma_turma(self):
-        self.assertFalse(Nota.objects.filter(matricula__turma__disciplina__nome='Educação física').exists())
+    def test_disciplinas_sem_configuracao_nao_tem_nota_em_nenhuma_turma(self):
+        for nome in ('Educação física', 'Artes'):
+            self.assertFalse(Nota.objects.filter(matricula__turma__disciplina__nome=nome).exists(), nome)
+            self.assertFalse(Avaliacao.objects.filter(disciplina__nome=nome).exists(), nome)
 
     def test_sem_nota_cobre_com_e_sem_registro(self):
         # Primeira disciplina do cálculo: nunca abriram a turma. Segunda: a Lista de Notas já criou o registro.
@@ -380,8 +383,8 @@ class ExcessoTests(TestCase):
     def test_nao_aumenta_o_numero_de_turmas(self):
         popular()
         self.assertEqual(set(Turma.objects.values_list('nome', flat=True)), set(TURMAS))
-        # 5 nomes x 7 disciplinas no ano atual, mais as duas turmas de ano anterior.
-        self.assertEqual(Turma.objects.count(), 37)
+        # 5 nomes x 8 disciplinas no ano atual, mais as duas turmas de ano anterior.
+        self.assertEqual(Turma.objects.count(), 42)
 
     def test_turma_de_ano_futuro_sai(self):
         Turma.objects.create(nome='1A', disciplina=self.matematica, ano=self.ano + 1)

@@ -51,19 +51,24 @@ $(document).ready(function () {
 
     function atualizarSalvar() {
         var quantidade = pendentes().length;
-        $('#tn-salvar').prop('disabled', quantidade === 0);
+        $('#tn-salvar, #tn-cancelar').prop('disabled', quantidade === 0);
         $('#tn-pendentes').text(
             quantidade === 0 ? '' : quantidade === 1 ? '1 nota ainda não salva' : quantidade + ' notas ainda não salvas'
         );
     }
 
-    // No Cadastro, sair da célula só guarda a nota na tela; nota fora de 0 a 10 não fica.
+    // No Cadastro, sair da célula só guarda a nota na tela; nota fora de 0 a 10, ou com mais de
+    // duas casas depois da vírgula, não fica.
     function guardarNaTela($celula, valor) {
         var numero = Number(valor.replace(',', '.'));
+        var casas = (valor.replace(',', '.').split('.')[1] || '').replace(/0+$/, '').length;
         $celula.removeAttr('contenteditable');
         if (valor !== '' && !(numero >= 0 && numero <= 10)) {
             $celula.empty().removeClass('nota-pendente');
-            alert($celula.attr('data-rotulo') + ': a nota deve ser um número entre 0 e 10.');
+            avisar($celula.attr('data-rotulo') + ': a nota deve ser um número entre 0 e 10.');
+        } else if (casas > 2) {
+            $celula.empty().removeClass('nota-pendente');
+            avisar($celula.attr('data-rotulo') + ': a nota pode ter no máximo 2 casas depois da vírgula.');
         } else {
             $celula.text(valor).toggleClass('nota-pendente', valor !== '');
         }
@@ -117,7 +122,7 @@ $(document).ready(function () {
         tabela.row($celula.closest('tr')).invalidate('dom');
         atualizarAviso();
         // A linha pode já ter saído da tela (outra página da tabela): a mensagem diz de qual nota se trata.
-        alert($celula.attr('data-rotulo') + ': ' + mensagem);
+        avisar($celula.attr('data-rotulo') + ': ' + mensagem);
     }
 
     // No Cadastro, quem caiu em exame tem a célula do exame aberta em branco, sem precisar recarregar a página.
@@ -157,7 +162,7 @@ $(document).ready(function () {
                 tabela.row($linha).invalidate('dom');
                 atualizarAviso();
                 if (resp.ja_lancada) {
-                    alert($celula.attr('data-rotulo') + ': ' + resp.erro);
+                    avisar($celula.attr('data-rotulo') + ': ' + resp.erro);
                 }
             } else {
                 naoSalvou($celula, original, (resp && resp.erro) || erroPadrao);
@@ -221,18 +226,37 @@ $(document).ready(function () {
 
     // ---------- Cadastro: botão Salvar ----------
 
-    // Sair da página com nota digitada e não salva: o navegador pede confirmação.
-    window.addEventListener('beforeunload', function (evento) {
-        if (modoLancar && pendentes().length) {
-            evento.preventDefault();
-            evento.returnValue = '';
+    // Sair da página com nota digitada e não salva: o sistema pergunta antes (ver base_sistema.html).
+    if (modoLancar) {
+        window.alteracoesNaoSalvas = function () {
+            return pendentes().length > 0;
+        };
+    }
+
+    // Cancelar: descarta as notas digitadas e ainda não salvas, depois de confirmar.
+    $('#tn-cancelar').on('click', function () {
+        // A célula que ainda estiver aberta entra na conta.
+        $tabela.find('td[contenteditable="true"]').each(function () {
+            guardarNaTela($(this), $(this).text().trim());
+        });
+        var quantidade = pendentes().length;
+        if (!quantidade) {
+            atualizarSalvar();
+            return;
         }
+        perguntarAntesDeCancelar(function () {
+            pendentes().each(function () {
+                $(this).empty().removeClass('nota-pendente');
+                tabela.row($(this).closest('tr')).invalidate('dom');
+            });
+            atualizarSalvar();
+        });
     });
 
     // Com uma nota sendo digitada o Salvar já fica disponível, antes mesmo de sair da célula.
     $tabela.on('input', 'td[contenteditable="true"]', function () {
         if (modoLancar) {
-            $('#tn-salvar').prop('disabled', false);
+            $('#tn-salvar, #tn-cancelar').prop('disabled', false);
         }
     });
 

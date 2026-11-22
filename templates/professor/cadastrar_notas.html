@@ -157,12 +157,12 @@
                             <div class="form-group row">
                                 <label class="col-sm-2 col-form-label">{{ item.avaliacao.nome }}</label>
                                 <div class="col-sm-10">
-                                    <input type="number" step="any" min="0" max="10"
+                                    <input type="number" step="0.01" min="0" max="10"
                                         class="form-control nota-campo"
                                         data-peso="{{ item.avaliacao.valor|default:0 }}"
                                         data-gravada="{{ item.valor|default_if_none:'' }}"
                                         name="nota_avaliacao_{{ item.avaliacao.id }}"
-                                        value="{{ item.valor|floatformat:"-2" }}"
+                                        value="{{ item.valor_texto }}"
                                         {% if item.valor is None %}disabled style="background-color: #f4f7fa;" placeholder="Nota ainda não lançada"{% else %}placeholder="0.0 – 10.0"{% endif %}>
                                 </div>
                             </div>
@@ -241,7 +241,11 @@
                         </div>
                         <div class="text-center" style="border: 1px dashed #ddd; border-radius: 4px; padding: 2rem 1rem;">
                             <i class="ti-info" style="font-size: 22px; color: #999;"></i>
+                            {% if aviso_configuracao %}
+                            <p class="text-muted mt-2 mb-0">A configuração das avaliações dessa disciplina está incompleta. {{ aviso_configuracao }}</p>
+                            {% else %}
                             <p class="text-muted mt-2 mb-0">Cadastre as avaliações dessa disciplina antes de lançar notas</p>
+                            {% endif %}
                             <a href="{% url 'configurar-avaliacoes' %}" class="btn-filtrar-delicado mt-2"><i class="ti-settings"></i> <span class="texto-sublinhado">Ir para configurar avaliações</span></a>
                         </div>
                     {% else %}
@@ -268,6 +272,7 @@
                                 <i class="ti-hand-point-up" style="color: #03458F; margin-right: 4px;" aria-hidden="true"></i>
                                 Dê dois cliques na célula em branco para digitar a nota. As notas digitadas ficam destacadas
                                 e só são gravadas quando você clicar em <strong>Salvar</strong>; a MF e a situação aparecem depois de salvar.
+                                Para desistir das notas digitadas, clique em <strong>Cancelar</strong>.
                             </p>
 
                             {% include "partials/tabela-notas.html" with modo="lancar" turma_id=turma_obj.id %}
@@ -277,6 +282,7 @@
                                 <span id="tn-pendentes" class="text-muted" style="font-size: 13px;" role="status"></span>
                                 <button type="button" id="tn-salvar" class="btn-filtrar-delicado" disabled
                                     data-nome="as notas de {{ turma_obj.disciplina.nome }}, turma {{ turma_obj.nome }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
+                                <button type="button" id="tn-cancelar" class="btn-filtrar-delicado btn-delicado-vermelho" disabled><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></button>
                             </div>
                         {% endif %}
                     {% endif %}
@@ -429,6 +435,6 @@ if (gateDisciplina) {
 <script src="{% static 'vendor/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
 <script src="{% static 'vendor/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js' %}"></script>
-<script src="{% static 'js/tabela-notas.js' %}?v=3"></script>
+<script src="{% static 'js/tabela-notas.js' %}?v=7"></script>
 {% endif %}
 {% endblock %}

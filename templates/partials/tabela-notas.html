@@ -50,7 +50,10 @@
                         <td>
                             {% url 'editar-nota' item.nota_id as url_editar %}
                             {% url 'deletar-nota' item.nota_id as url_deletar %}
-                            {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=item.aluno.first_name %}
+                            {# O Excluir apaga todas as notas do aluno nessa disciplina (o aluno e a matrícula ficam): a janela diz isso. #}
+                            {% with o_que_exclui="todas as notas de "|add:item.aluno.first_name|add:" em "|add:turma_obj.disciplina.nome %}
+                            {% include "partials/acoes-tabela.html" with url_editar=url_editar url_deletar=url_deletar item_nome=o_que_exclui titulo_excluir="Excluir todas as notas desse aluno na disciplina" %}
+                            {% endwith %}
                         </td>
                     {% endif %}
                 </tr>

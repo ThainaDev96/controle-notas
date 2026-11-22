@@ -64,4 +64,5 @@ urlpatterns = [
     path("avaliacao/cadastrar-ajax/", views.cadastrar_avaliacao_ajax, name="cadastrar-avaliacao-ajax"),
     path("avaliacao/editar-ajax/", views.editar_avaliacao_ajax, name="editar-avaliacao-ajax"),
     path("avaliacao/salvar-ajax/", views.salvar_avaliacoes_ajax, name="salvar-avaliacoes-ajax"),
+    path("avaliacao/refazer/", views.refazer_configuracao, name="refazer-configuracao"),
 ]

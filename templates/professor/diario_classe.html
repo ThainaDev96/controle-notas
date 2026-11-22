@@ -247,6 +247,7 @@
 
                 <!-- BOTÕES -->
                 <div>
+                    <button type="button" id="dc-cancelar" class="btn-filtrar-delicado btn-delicado-vermelho" style="float: right; margin-right: 16px;"><i class="ti-close"></i> <span class="texto-sublinhado">Cancelar</span></button>
                     <button type="button" id="dc-salvar" class="btn-filtrar-delicado" style="float: right; margin-right: 16px;"
                         data-nome="o diário de {{ data|date:'d/m/Y' }}"><i class="ti-check"></i> <span class="texto-sublinhado">Salvar</span></button>
                 </div>
@@ -367,13 +368,10 @@ $(document).ready(function () {
         });
     });
 
-    // Sair da página com mudança ainda não salva: o navegador pede confirmação
-    window.addEventListener('beforeunload', function (evento) {
-        if (alterado) {
-            evento.preventDefault();
-            evento.returnValue = '';
-        }
-    });
+    // Sair da página com mudança ainda não salva: o sistema pergunta antes (ver base_sistema.html)
+    window.alteracoesNaoSalvas = function () {
+        return alterado;
+    };
 
     // Clicar muda a célula, as faltas e a frequência na hora; nada vai para o banco antes do Salvar.
     $('#TabelaDiario').on('click', '.dc-periodo', function () {
@@ -387,6 +385,17 @@ $(document).ready(function () {
         pintarCelula($celula, true);
         somarFaltas($celula.closest('tr'), contaFalta(depois) - contaFalta(antes));
         alterado = true;
+    });
+
+    // Cancelar: desfaz o que foi marcado e ainda não salvo, voltando ao que está gravado nesta data.
+    $('#dc-cancelar').on('click', function () {
+        if (!alterado) {
+            return;
+        }
+        perguntarAntesDeCancelar(function () {
+            alterado = false;
+            window.location.href = "{% url 'diario-classe' %}?data={{ data|date:'Y-m-d' }}";
+        });
     });
 
     // Salvar abre a confirmação; o "Sim, salvar" grava a aula e as células que mudaram, de uma vez.
@@ -420,14 +429,12 @@ $(document).ready(function () {
                 alterado = false;
                 window.location.href = "{% url 'diario-classe' %}?data={{ data|date:'Y-m-d' }}";
             } else {
-                $('#modalSalvar').modal('hide');
                 $botao.prop('disabled', false);
-                alert((resp && resp.erro) || erroPadrao);
+                avisar((resp && resp.erro) || erroPadrao);
             }
         }).fail(function () {
-            $('#modalSalvar').modal('hide');
             $botao.prop('disabled', false);
-            alert(erroPadrao);
+            avisar(erroPadrao);
         });
     });
     {% endif %}

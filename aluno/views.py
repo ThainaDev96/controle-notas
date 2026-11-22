@@ -16,6 +16,7 @@ from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from datetime import datetime, timedelta, timezone as dt_timezone
+from decimal import Decimal, ROUND_HALF_UP
 from functools import wraps
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -180,27 +181,6 @@ def _recalcular_media_disciplina(matricula):
 
     nota.save()
     return nota
-
-def _recalcular_notas_da_disciplina(disciplina):
-    """
-    O peso de uma avaliação mudou: atualiza a MF de quem já tem todas as notas da disciplina.
-    Quem continua com a mesma MF fica como está.
-    """
-    avaliacoes = list(Avaliacao.objects.filter(disciplina=disciplina).order_by('id'))
-    notas = list(Nota.objects.filter(
-        matricula__turma__disciplina=disciplina, matricula__turma__ativo=True, matricula__ativo=True
-    ).select_related('matricula__turma__disciplina'))
-
-    lancadas_por_nota = {}
-    for na in NotaAvaliacao.objects.filter(nota__in=notas, avaliacao__in=avaliacoes, nota_obtida__isnull=False):
-        lancadas_por_nota.setdefault(na.nota_id, {})[na.avaliacao_id] = na.nota_obtida
-
-    for nota in notas:
-        lancadas = lancadas_por_nota.get(nota.id, {})
-        if avaliacoes and len(lancadas) == len(avaliacoes):
-            media = calcular_nota_final(disciplina, [(av, lancadas[av.id]) for av in avaliacoes])
-            if media != nota.media_final:
-                _recalcular_media_disciplina(nota.matricula)
 
 def lista_notas(request):
     if request.GET.get('limpar'):
@@ -381,8 +361,25 @@ def grade_horario(request):
 def deletar_nota(request, id):
     nota = get_object_or_404(Nota, id=id)
     nota.delete()
-    messages.success(request, "Nota deletada com sucesso!")
+    messages.success(request, "Notas do aluno excluídas com sucesso!")
     return redirect("lista-notas")
+
+# A nota vai de 0 a 10 com no máximo duas casas depois da vírgula (8, 8,5 ou 8,75; nunca 1,2222222).
+CASAS_DA_NOTA = 2
+ERRO_CASAS_DA_NOTA = f"A nota pode ter no máximo {CASAS_DA_NOTA} casas depois da vírgula."
+
+def _casas_demais(texto):
+    """O número digitado (já com ponto no lugar da vírgula) tem mais casas decimais do que a nota aceita."""
+    return '.' in texto and len(texto.split('.', 1)[1].rstrip('0')) > CASAS_DA_NOTA
+
+def _nota_no_formulario(valor):
+    """Nota como o formulário de edição mostra: até duas casas, sem zero sobrando (1.9, e não 1.90)."""
+    if valor is None:
+        return ''
+    # Arredonda como na escola (6,125 vira 6,13), e não para o par mais próximo.
+    arredondada = Decimal(str(valor)).quantize(Decimal(1).scaleb(-CASAS_DA_NOTA), rounding=ROUND_HALF_UP)
+    texto = f"{arredondada:f}"
+    return texto.rstrip('0').rstrip('.') if '.' in texto else texto
 
 def _mesma_nota(digitada, gravada):
     """O formulário mostra a nota com até 2 casas: diferença menor que isso não é mudança."""
@@ -417,6 +414,9 @@ def editar_nota(request, id):
                 except ValueError:
                     erro = f"Nota inválida em '{avaliacao.nome}'."
                     break
+                if _casas_demais(valor.strip().replace(',', '.')):
+                    erro = f"{ERRO_CASAS_DA_NOTA} Confira a nota de '{avaliacao.nome}'."
+                    break
                 if not 0 <= valor_float <= NOTA_MAXIMA:
                     erro = f"A nota de '{avaliacao.nome}' deve estar entre 0 e {NOTA_MAXIMA}."
                     break
@@ -446,7 +446,7 @@ def editar_nota(request, id):
     turma_do_aluno = nota.turma
 
     avaliacoes_com_nota = [
-        {'avaliacao': av, 'valor': notas_lancadas.get(av.id)}
+        {'avaliacao': av, 'valor': notas_lancadas.get(av.id), 'valor_texto': _nota_no_formulario(notas_lancadas.get(av.id))}
         for av in avaliacoes
     ]
 
@@ -522,9 +522,14 @@ def cadastrar_notas(request):
     sem_avaliacoes = False
     todas_lancadas = False
 
+    aviso_configuracao = None
+
     if turma_obj:
         avaliacoes = list(_avaliacoes_da_turma(turma_obj).order_by('id'))
-        sem_avaliacoes = len(avaliacoes) == 0
+        # Com a configuração incompleta (peso em branco, ponderada sem fechar 100) não se lança nota:
+        # a tela mostra o aviso e manda para Configurar avaliações.
+        aviso_configuracao = _erro_na_configuracao(turma_obj.disciplina, [avaliacao.valor for avaliacao in avaliacoes])
+        sem_avaliacoes = len(avaliacoes) == 0 or bool(aviso_configuracao)
 
         if not sem_avaliacoes:
             linhas = _linhas_tabela_notas(turma_obj, avaliacoes)
@@ -544,6 +549,7 @@ def cadastrar_notas(request):
         "alunos_notas": alunos_notas,
         "tem_alunos": tem_alunos,
         "lancamento_selecionado": lancamento,
+        "aviso_configuracao": aviso_configuracao,
         "sem_avaliacoes": sem_avaliacoes,
         "todas_lancadas": todas_lancadas,
     })
@@ -577,6 +583,53 @@ def _validar_total_avaliacoes(disciplina, valor_novo, excluir_id=None):
 
 MODOS_CALCULO_VALIDOS = {'soma', 'ponderada', 'aritmetica'}
 
+# A configuração das avaliações é feita uma vez, no começo do ano letivo: depois de salva, não muda mais.
+ERRO_CONFIGURACAO_TRAVADA = "Essa disciplina já foi configurada para o ano letivo. A configuração não pode ser alterada."
+
+def _configuracao_travada(disciplina):
+    """A disciplina já tem avaliações salvas: a configuração só pode ser vista."""
+    return disciplina.avaliacao_set.exists()
+
+def _tem_nota_lancada(disciplina):
+    """Alguma nota já foi lançada em avaliação dessa disciplina: nem refazer a configuração é mais possível."""
+    return NotaAvaliacao.objects.filter(avaliacao__disciplina=disciplina, nota_obtida__isnull=False).exists()
+
+# Cada disciplina pode ter no máximo esta quantidade de avaliações.
+MAXIMO_AVALIACOES = 10
+
+def _erro_na_configuracao(disciplina, pesos):
+    """
+    O que falta para a configuração das avaliações estar completa, dados os pesos de todas elas.
+    Na soma e na ponderada toda avaliação precisa de peso e os pesos fecham exatamente o total do
+    modo (10 pontos na soma, 100% na ponderada): o professor distribui a nota inteira no começo do ano.
+    Na média aritmética o peso não entra na conta: o valor de cada avaliação pode ficar em branco
+    e, se for informado, vai de 0 a 10, como a nota.
+    """
+    limite = disciplina.limite_valor_avaliacoes
+    if not pesos:
+        return None
+    if limite is None:
+        if any(peso is not None and peso > NOTA_MAXIMA for peso in pesos):
+            return f"Na média aritmética o valor de cada avaliação vai de 0 a {NOTA_MAXIMA}."
+        return None
+    if any(peso is None for peso in pesos):
+        return "Informe o peso de todas as avaliações."
+    # Na média ponderada o peso é uma porcentagem inteira (20%, 35%...): quanto cada avaliação vale
+    # fica a critério do professor, desde que os pesos fechem 100%.
+    if disciplina.modo_calculo == 'ponderada' and any(peso <= 0 or peso != int(peso) for peso in pesos):
+        return "Na média ponderada o peso de cada avaliação é uma porcentagem inteira, a partir de 1% (por exemplo, 20%)."
+    total = round(sum(pesos), 2)
+    if total != limite:
+        if disciplina.modo_calculo == 'ponderada':
+            return f"Na média ponderada os pesos precisam fechar {limite}%. Hoje somam {total:g}%."
+        return f"Na soma dos pesos os pesos precisam fechar {limite} pontos. Hoje somam {total:g}."
+    return None
+
+def _erro_na_quantidade_de_avaliacoes(quantidade):
+    if quantidade > MAXIMO_AVALIACOES:
+        return f"Cada disciplina pode ter no máximo {MAXIMO_AVALIACOES} avaliações."
+    return None
+
 def configurar_avaliacoes(request):
     if request.GET.get('limpar'):
         request.session.pop('config_aval_disciplina', None)
@@ -598,7 +651,6 @@ def configurar_avaliacoes(request):
 
     disciplina_atual = None
     avaliacoes = Avaliacao.objects.none()
-    resumo_exemplo = None
     modo_valido = modo in MODOS_CALCULO_VALIDOS
 
     if disciplina_id and modo_valido and not voltando_para_selecao:
@@ -624,22 +676,22 @@ def configurar_avaliacoes(request):
             disciplina_id=disciplina_id
         ).order_by('id')
 
-        if avaliacoes:
-            notas_exemplo = [(av, NOTA_MAXIMA * 0.8) for av in avaliacoes]
-            resumo_exemplo = montar_resumo_formula(disciplina_atual, notas_exemplo)
-
     disciplinas = Disciplina.objects.filter(ativo=True).annotate(
         total_avaliacoes=Count('avaliacao')
     )
 
     return render(request, 'professor/configurar_avaliacoes.html', {
+        'maximo_avaliacoes': MAXIMO_AVALIACOES,
+        # Com avaliações salvas a tela é só de visualização; sem nenhuma nota lançada ainda dá para refazer.
+        'travada': bool(avaliacoes),
+        'pode_refazer': bool(avaliacoes) and not _tem_nota_lancada(disciplina_atual),
+        'limite_dos_pesos': disciplina_atual.limite_valor_avaliacoes if disciplina_atual else None,
         'avaliacoes': avaliacoes,
         'disciplinas': disciplinas,
         'disciplina_selecionada': disciplina_id,
         'modo_selecionado': modo,
         'disciplina_atual': disciplina_atual,
         'sem_avaliacoes': bool(disciplina_id and modo_valido and not avaliacoes),
-        'resumo_exemplo': resumo_exemplo,
     })
 
 def cadastrar_avaliacao(request):
@@ -667,7 +719,8 @@ def cadastrar_avaliacao(request):
             messages.error(request, "Defina o modo de cálculo dessa disciplina antes de cadastrar avaliações.")
             return redirect("configurar-avaliacoes")
 
-        erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
+        erro = (ERRO_CONFIGURACAO_TRAVADA if _configuracao_travada(disciplina) else None) \
+            or _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
         if erro:
             messages.error(request, erro)
             return render(request, "professor/cadastrar_avaliacao.html", {
@@ -688,47 +741,38 @@ def cadastrar_avaliacao(request):
     })
 
 def editar_avaliacao(request, id):
-    avaliacao = get_object_or_404(Avaliacao, id=id)
-
-    if request.method == "POST":
-        valor = request.POST.get("valor") or None
-        disciplina_id = request.POST.get("disciplina")
-        disciplina = get_object_or_404(Disciplina, id=disciplina_id)
-
-        erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0, excluir_id=avaliacao.id)
-        if erro:
-            messages.error(request, erro)
-            return render(request, "professor/editar_avaliacao.html", {
-                "avaliacao": avaliacao,
-                "disciplinas": Disciplina.objects.filter(ativo=True),
-            })
-
-        peso_mudou = (float(valor) if valor else None) != avaliacao.valor
-
-        avaliacao.nome = request.POST.get("nome")
-        avaliacao.tipo = request.POST.get("tipo")
-        avaliacao.valor = valor
-        avaliacao.disciplina_id = disciplina_id
-
-        with transaction.atomic():
-            avaliacao.save()
-            if peso_mudou:
-                _recalcular_notas_da_disciplina(disciplina)
-
-        messages.success(request, "Avaliação editada com sucesso!")
-        return redirect("configurar-avaliacoes")
-
-    disciplinas = Disciplina.objects.filter(ativo=True)
-
-    return render(request, "professor/editar_avaliacao.html", {
-        "avaliacao": avaliacao,
-        "disciplinas": disciplinas,
-    })
+    # Avaliação salva faz parte da configuração do ano letivo: não é mais editada.
+    get_object_or_404(Avaliacao, id=id)
+    messages.error(request, ERRO_CONFIGURACAO_TRAVADA)
+    return redirect("configurar-avaliacoes")
 
 def deletar_avaliacao(request, id):
-    avaliacao = get_object_or_404(Avaliacao, id=id)
-    avaliacao.delete()
-    messages.success(request, "Avaliação excluída com sucesso!")
+    # Avaliação salva não é excluída sozinha: para mudar, só refazendo a configuração inteira,
+    # e apenas enquanto não houver nota lançada (refazer_configuracao).
+    get_object_or_404(Avaliacao, id=id)
+    messages.error(request, ERRO_CONFIGURACAO_TRAVADA)
+    return redirect("configurar-avaliacoes")
+
+@require_POST
+@_exige_professor
+def refazer_configuracao(request):
+    """
+    Botão "Refazer configuração": apaga as avaliações da disciplina e o modo de cálculo, para o
+    professor configurar de novo do zero. Só enquanto nenhuma nota foi lançada.
+    """
+    disciplina = get_object_or_404(Disciplina, id=_inteiro(request.POST.get('disciplina')))
+    with transaction.atomic():
+        if _tem_nota_lancada(disciplina):
+            messages.error(request, "Essa disciplina já tem notas lançadas. A configuração não pode mais ser refeita.")
+            return redirect("configurar-avaliacoes")
+        disciplina.avaliacao_set.all().delete()
+        disciplina.modo_calculo = None
+        disciplina.save(update_fields=['modo_calculo'])
+
+    # Volta para a escolha do modo de cálculo, com a disciplina já selecionada.
+    request.session['config_aval_disciplina'] = str(disciplina.id)
+    request.session.pop('config_aval_modo', None)
+    messages.success(request, "Configuração apagada. Escolha o modo de cálculo e configure de novo.")
     return redirect("configurar-avaliacoes")
 
 @require_POST
@@ -753,7 +797,8 @@ def cadastrar_avaliacao_ajax(request):
     if not disciplina.modo_calculo:
         return JsonResponse({'ok': False, 'erro': 'Escolha o modo de cálculo dessa disciplina antes de salvar.'})
 
-    erro = _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
+    erro = (ERRO_CONFIGURACAO_TRAVADA if not primeira else None) \
+        or _validar_total_avaliacoes(disciplina, float(valor) if valor else 0)
     if erro:
         return JsonResponse({'ok': False, 'erro': erro})
 
@@ -776,41 +821,9 @@ def cadastrar_avaliacao_ajax(request):
 
 @require_POST
 def editar_avaliacao_ajax(request):
-    avaliacao = get_object_or_404(Avaliacao, id=request.POST.get('id'))
-    campo = request.POST.get('campo')
-    valor = request.POST.get('valor')
-
-    if campo not in {'nome', 'tipo', 'valor'}:
-        return JsonResponse({'ok': False, 'erro': 'Campo inválido'})
-
-    # A tabela salva ao sair da célula, mesmo sem mudança: só recalcula se o peso mudou de fato.
-    peso_mudou = False
-    if campo == 'valor':
-        texto = _numero_digitado(request)
-        try:
-            valor_float = float(texto) if texto else 0
-        except ValueError:
-            return JsonResponse({'ok': False, 'erro': 'Valor inválido.'})
-        erro = _validar_total_avaliacoes(avaliacao.disciplina, valor_float, excluir_id=avaliacao.id)
-        if erro:
-            return JsonResponse({'ok': False, 'erro': erro})
-        novo_peso = valor_float if texto else None
-        peso_mudou = novo_peso != avaliacao.valor
-        avaliacao.valor = novo_peso
-    else:
-        if not valor:
-            return JsonResponse({'ok': False, 'erro': 'Esse campo não pode ficar vazio'})
-        setattr(avaliacao, campo, valor)
-
-    with transaction.atomic():
-        avaliacao.save()
-        if peso_mudou:
-            _recalcular_notas_da_disciplina(avaliacao.disciplina)
-
-    return JsonResponse({
-        'ok': True,
-        'tipo_display': avaliacao.get_tipo_display(),
-    })
+    # Avaliação salva faz parte da configuração do ano letivo: não é mais editada.
+    get_object_or_404(Avaliacao, id=_inteiro(request.POST.get('id')))
+    return JsonResponse({'ok': False, 'erro': ERRO_CONFIGURACAO_TRAVADA})
 
 TIPOS_AVALIACAO = {tipo for tipo, _ in Avaliacao._meta.get_field('tipo').choices}
 TAMANHO_NOME_AVALIACAO = Avaliacao._meta.get_field('nome').max_length
@@ -833,13 +846,15 @@ def _erro_no_nome_ou_tipo(nome, tipo):
 @_exige_professor
 def salvar_avaliacoes_ajax(request):
     """
-    Botão Salvar da tela Configurar Avaliações: grava de uma vez as avaliações novas e o que mudou
-    nas já gravadas. Tudo é conferido antes; se algo for recusado, nada é gravado.
+    Botão Salvar da tela Configurar Avaliações: grava de uma vez a configuração da disciplina, que
+    a partir daí fica travada. Tudo é conferido antes; se algo for recusado, nada é gravado.
     """
     with transaction.atomic():
         # Trava a disciplina: dois envios ao mesmo tempo não passam juntos do limite dos pesos.
         disciplina = get_object_or_404(Disciplina.objects.select_for_update(), id=_inteiro(request.POST.get('disciplina')))
         gravadas = list(Avaliacao.objects.filter(disciplina=disciplina).order_by('id'))
+        if gravadas:
+            return JsonResponse({'ok': False, 'erro': ERRO_CONFIGURACAO_TRAVADA})
 
         novas = []
         for nome, tipo, valor in zip(request.POST.getlist('nova_nome'), request.POST.getlist('nova_tipo'), request.POST.getlist('nova_valor')):
@@ -863,29 +878,9 @@ def salvar_avaliacoes_ajax(request):
         if novas and not disciplina.modo_calculo:
             return JsonResponse({'ok': False, 'erro': 'Escolha o modo de cálculo dessa disciplina antes de salvar.'})
 
-        # Campo que não vem no envio fica como está.
-        alteradas = []
-        peso_mudou = False
-        for avaliacao in gravadas:
-            nome = request.POST.get(f'nome_{avaliacao.id}')
-            tipo = request.POST.get(f'tipo_{avaliacao.id}')
-            valor = request.POST.get(f'valor_{avaliacao.id}')
-            nome = avaliacao.nome if nome is None else nome.strip()
-            tipo = avaliacao.tipo if tipo is None else tipo
-            erro = _erro_no_nome_ou_tipo(nome, tipo)
-            if erro:
-                return JsonResponse({'ok': False, 'erro': erro})
-            if valor is None:
-                novo_peso = avaliacao.valor
-            else:
-                try:
-                    novo_peso = _peso_digitado(valor)
-                except ValueError:
-                    return JsonResponse({'ok': False, 'erro': 'Valor inválido.'})
-            if (nome, tipo, novo_peso) != (avaliacao.nome, avaliacao.tipo, avaliacao.valor):
-                peso_mudou = peso_mudou or novo_peso != avaliacao.valor
-                avaliacao.nome, avaliacao.tipo, avaliacao.valor = nome, tipo, novo_peso
-                alteradas.append(avaliacao)
+        erro = _erro_na_quantidade_de_avaliacoes(len(gravadas) + len(novas)) if novas else None
+        if erro:
+            return JsonResponse({'ok': False, 'erro': erro})
 
         # Os mesmos limites de quando cada avaliação era salva sozinha, agora sobre o total final.
         for avaliacao in gravadas + novas:
@@ -895,16 +890,15 @@ def salvar_avaliacoes_ajax(request):
         erro = _erro_no_total_das_avaliacoes(disciplina, sum(avaliacao.valor or 0 for avaliacao in gravadas + novas))
         if erro:
             return JsonResponse({'ok': False, 'erro': erro})
+        # A configuração só é gravada completa, para o cálculo da média nunca dar erro lá na frente.
+        erro = _erro_na_configuracao(disciplina, [avaliacao.valor for avaliacao in gravadas + novas])
+        if erro:
+            return JsonResponse({'ok': False, 'erro': erro})
 
         if primeira:
             disciplina.save(update_fields=['modo_calculo'])
-        for avaliacao in alteradas:
-            avaliacao.save(update_fields=['nome', 'tipo', 'valor'])
         for avaliacao in novas:
             avaliacao.save()
-        # Só recalcula as médias se algum peso mudou de fato, uma vez só (o exame lançado nunca é apagado).
-        if peso_mudou:
-            _recalcular_notas_da_disciplina(disciplina)
 
     # A tela recarrega depois da resposta e mostra a mensagem, como nos outros botões Salvar.
     messages.success(request, 'Avaliações salvas com sucesso!')
@@ -973,6 +967,11 @@ def editar_nota_avaliacao_ajax(request):
     if not avaliacao:
         return JsonResponse({'ok': False, 'erro': 'Avaliação não encontrada.'})
 
+    # Peso em branco na soma ou na ponderada faria a conta da média dar erro: a nota não entra.
+    if avaliacao.disciplina.limite_valor_avaliacoes is not None and \
+            Avaliacao.objects.filter(disciplina_id=avaliacao.disciplina_id, valor__isnull=True).exists():
+        return JsonResponse({'ok': False, 'erro': 'Há avaliação sem peso nessa disciplina. Acerte em Configurar avaliações antes de lançar notas.'})
+
     texto = _numero_digitado(request)
     if texto:
         try:
@@ -983,6 +982,8 @@ def editar_nota_avaliacao_ajax(request):
         # Escrito assim para recusar também "nan", que não é maior nem menor que nenhum número.
         if not 0 <= valor <= NOTA_MAXIMA:
             return JsonResponse({'ok': False, 'erro': f'A nota deve estar entre 0 e {NOTA_MAXIMA}.'})
+        if _casas_demais(texto):
+            return JsonResponse({'ok': False, 'erro': ERRO_CASAS_DA_NOTA})
     elif so_lancar:
         return JsonResponse({'ok': False, 'erro': 'Informe a nota.'})
     else:
@@ -1061,6 +1062,8 @@ def lancar_nota_exame_ajax(request):
     # Escrito assim para recusar também "nan", que não é maior nem menor que nenhum número.
     if not 0 <= valor_float <= 10:
         return JsonResponse({'ok': False, 'erro': 'A nota do exame deve estar entre 0 e 10.'})
+    if _casas_demais(valor):
+        return JsonResponse({'ok': False, 'erro': ERRO_CASAS_DA_NOTA})
 
     _, situacao_final = calcular_pos_exame(nota.media_final, valor_float)
     nota.nota_exame = valor_float

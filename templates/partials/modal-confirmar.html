@@ -1,0 +1,19 @@
+{# Janela de pergunta do sistema, no lugar do confirm() e do "Sair do site?" do navegador. #}
+{# Quem abre é a função perguntar(), no base_sistema.html, que troca o título, o texto e o nome dos botões. #}
+<div class="modal fade" id="modalConfirmar" tabindex="-1" role="dialog" aria-labelledby="modalConfirmarTitulo">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmarTitulo"></h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalConfirmarTexto"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn-filtrar-delicado" data-dismiss="modal"><i class="ti-arrow-left"></i> <span class="texto-sublinhado" id="modalConfirmarVoltar"></span></button>
+                <button type="button" id="modalConfirmarSim" class="btn-filtrar-delicado btn-delicado-vermelho"><i class="ti-close"></i> <span class="texto-sublinhado" id="modalConfirmarSimTexto"></span></button>
+            </div>
+        </div>
+    </div>
+</div>

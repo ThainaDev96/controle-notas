@@ -143,7 +143,9 @@
     }
     /* Respiro entre "Cancelar" e "Sim, excluir" (ou "Sim, salvar") na janela de confirmação */
     #modalDeletar .modal-footer,
-    #modalSalvar .modal-footer {
+    #modalSalvar .modal-footer,
+    #modalAviso .modal-footer,
+    #modalConfirmar .modal-footer {
         gap: 20px;
     }
     /* Célula aberta da tabela de notas (Cadastro e Lista): contorno de foco no azul da marca, como no diário.
@@ -158,7 +160,10 @@
         color: #03458F;
     }
     /* Botão padrão sem nada para fazer (ex.: Salvar sem nota digitada) */
-    .btn-filtrar-delicado:disabled {
+    .btn-filtrar-delicado:disabled,
+    .btn-filtrar-delicado.btn-delicado-vermelho:disabled,
+    .btn-filtrar-delicado:disabled:hover,
+    .btn-filtrar-delicado:disabled:hover i {
         color: #9aa0a6;
         cursor: not-allowed;
     }
@@ -421,6 +426,9 @@
         </div>
     </div>
 
+    {% include "partials/modal-aviso.html" %}
+    {% include "partials/modal-confirmar.html" %}
+
     <script src="{% static 'vendor/jquery/js/jquery.min.js' %}"></script>
     <script src="{% static 'vendor/jquery-ui/js/jquery-ui.min.js' %}"></script>
     <script src="{% static 'vendor/popper.js/js/popper.min.js' %}"></script>
@@ -435,6 +443,125 @@
     <script src="{% static 'js/acoes-tabela.js' %}"></script>
 
     <script> 
+    // Aviso do sistema, no lugar do alert() do navegador: abre a janela "Atenção" com a mensagem.
+    // Mais de um aviso seguido fica na mesma janela, um embaixo do outro.
+    function avisar(mensagem) {
+        var $janela = $('#modalAviso');
+        // .text() trata a mensagem como texto, nunca como HTML
+        $('<p class="mb-2">').text(mensagem).appendTo('#modalAvisoTexto');
+
+        if ($janela.hasClass('show') || $janela.data('abrindo')) {
+            return;
+        }
+        $janela.data('abrindo', true);
+
+        // Com outra janela aberta (a de confirmar o Salvar), espera ela fechar para não ficarem duas juntas.
+        var $outra = $('.modal.show').not($janela);
+        if ($outra.length) {
+            $outra.one('hidden.bs.modal', function () {
+                $janela.modal('show');
+            }).modal('hide');
+        } else {
+            $janela.modal('show');
+        }
+    }
+    $(function () {
+        $('#modalAviso').on('shown.bs.modal', function () {
+            $(this).data('abrindo', false);
+        }).on('hidden.bs.modal', function () {
+            $(this).data('abrindo', false);
+            $('#modalAvisoTexto').empty();
+        });
+    });
+
+    // Pergunta do sistema, no lugar do confirm() do navegador: abre a janela com o título, o texto e
+    // o nome dos dois botões, e só chama aoConfirmar se a pessoa escolher o botão de confirmar.
+    function perguntar(opcoes, aoConfirmar) {
+        var $janela = $('#modalConfirmar');
+        $('#modalConfirmarTitulo').text(opcoes.titulo);
+        $('#modalConfirmarTexto').text(opcoes.texto);
+        $('#modalConfirmarVoltar').text(opcoes.voltar);
+        $('#modalConfirmarSimTexto').text(opcoes.confirmar);
+        $('#modalConfirmarSim').off('click').on('click', function () {
+            $janela.modal('hide');
+            aoConfirmar();
+        });
+        $janela.modal('show');
+    }
+
+    // SAIR SEM SALVAR
+    // As telas com botão Salvar (diário, cadastro de notas, configurar avaliações) dizem aqui se há
+    // mudança ainda não salva, com window.alteracoesNaoSalvas = function () { return ...; }.
+    var saidaLiberada = false;
+
+    function haMudancaNaoSalva() {
+        return !saidaLiberada && typeof window.alteracoesNaoSalvas === 'function' && window.alteracoesNaoSalvas();
+    }
+
+    // A mesma janela para sair da tela (menu, Trocar, Filtrar...) e para o botão Cancelar.
+    function perguntarAntesDeSair(sair) {
+        perguntar({
+            titulo: 'Sair sem salvar?',
+            texto: 'Há alterações que ainda não foram salvas. Se você sair agora, elas serão perdidas.',
+            voltar: 'Continuar nesta tela',
+            confirmar: 'Sair sem salvar'
+        }, function () {
+            saidaLiberada = true;
+            sair();
+        });
+    }
+
+    // Botão Cancelar das telas com Salvar: a mesma janela, e ao confirmar desfaz o que não foi salvo.
+    function perguntarAntesDeCancelar(desfazer) {
+        perguntar({
+            titulo: 'Cancelar sem salvar?',
+            texto: 'Há alterações que ainda não foram salvas. Se você cancelar agora, elas serão perdidas.',
+            voltar: 'Continuar nesta tela',
+            confirmar: 'Cancelar sem salvar'
+        }, desfazer);
+    }
+
+    // Clicar em um link do sistema (menu, Trocar disciplina/turma, Sair...) com mudança não salva
+    // abre a janela do sistema em vez do aviso do navegador. O clique é pego na descida (captura),
+    // antes dos scripts do menu do tema, que não deixavam o clique chegar aqui.
+    document.addEventListener('click', function (evento) {
+        var link = evento.target.closest ? evento.target.closest('a[href]') : null;
+        if (!link) {
+            return;
+        }
+        var href = link.getAttribute('href');
+        if (!haMudancaNaoSalva() || !href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0 ||
+                link.target === '_blank' || evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey) {
+            return;
+        }
+        evento.preventDefault();
+        evento.stopPropagation();
+        perguntarAntesDeSair(function () {
+            window.location.href = href;
+        });
+    }, true);
+
+    // O mesmo ao enviar um formulário da tela (o Filtrar, por exemplo).
+    $(document).on('submit', 'form', function (evento) {
+        if (!haMudancaNaoSalva()) {
+            return;
+        }
+        var formulario = this;
+        evento.preventDefault();
+        perguntarAntesDeSair(function () {
+            formulario.submit();
+        });
+    });
+
+    // Fechar a aba, atualizar a página ou digitar outro endereço não passam pelo sistema: nesses casos
+    // só o próprio navegador consegue perguntar, com a janela dele.
+    window.addEventListener('beforeunload', function (evento) {
+        if (haMudancaNaoSalva()) {
+            evento.preventDefault();
+            evento.returnValue = '';
+        }
+    });
+
     document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll(".alert-auto-hide").forEach(function (alertBox) {
             setTimeout(() => {

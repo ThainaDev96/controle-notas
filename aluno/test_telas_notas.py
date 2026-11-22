@@ -504,14 +504,6 @@ class ConfigurarAvaliacoesTests(DadosDasTelas):
         self.assertFalse(self._salvar_avaliacao('10')['ok'])
         self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
 
-    def test_disciplina_com_avaliacao_mantem_o_modo_gravado(self):
-        self.client.post(self.url, {'disciplina': self.matematica.id, 'modo': 'ponderada'})
-        resposta = self.client.post(reverse('cadastrar-avaliacao-ajax'), {
-            'nome': 'Prova 2', 'tipo': 'prova', 'valor': '0', 'disciplina': self.matematica.id,
-        }).json()
-        self.assertTrue(resposta['ok'])
-        self.assertEqual(Disciplina.objects.get(id=self.matematica.id).modo_calculo, 'ponderada')
-
 
 class SalvarAvaliacoesTests(DadosDasTelas):
     """O botão Salvar de Configurar Avaliações grava tudo de uma vez, depois da confirmação."""
@@ -534,12 +526,82 @@ class SalvarAvaliacoesTests(DadosDasTelas):
     def _pesos_da_matematica(self):
         return list(Avaliacao.objects.filter(disciplina=self.matematica).order_by('id').values_list('nome', 'tipo', 'valor'))
 
-    def test_tela_tem_o_salvar_com_confirmacao(self):
+    def test_disciplina_sem_configuracao_tem_o_salvar_com_confirmacao(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'ponderada'})
+        resposta = self.client.get(self.url)
+        self.assertFalse(resposta.context['travada'])
+        self.assertContains(resposta, 'id="btn-salvar-avaliacoes"')
+        self.assertContains(resposta, 'id="btn-nova-avaliacao"')
+        self.assertContains(resposta, 'id="modalSalvar"')
+        self.assertContains(resposta, 'data-nome="as avaliações de Educação física"')
+        self.assertNotContains(resposta, 'id="aviso-configuracao-travada"')
+
+    def test_disciplina_configurada_abre_so_para_visualizar(self):
         self.client.post(self.url, {'disciplina': self.matematica.id, 'modo': 'ponderada'})
         resposta = self.client.get(self.url)
-        self.assertContains(resposta, 'id="btn-salvar-avaliacoes"')
-        self.assertContains(resposta, 'id="modalSalvar"')
-        self.assertContains(resposta, 'data-nome="as avaliações de Matemática"')
+        self.assertTrue(resposta.context['travada'])
+        self.assertContains(resposta, 'id="aviso-configuracao-travada"')
+        self.assertContains(resposta, 'Esta disciplina já foi configurada para o ano letivo.')
+        # Mostra as avaliações e os pesos, sem nada para mexer.
+        self.assertContains(resposta, '<td>Prova</td>', html=True)
+        self.assertContains(resposta, '<th>Peso (%)</th>', html=True)
+        for ausente in ('id="btn-nova-avaliacao"', 'id="btn-salvar-avaliacoes"', 'id="btn-cancelar-avaliacoes"',
+                        'contenteditable="true" class="editavel-avaliacao" data-id=', 'btn-deletar', '<th class="col-acoes">'):
+            self.assertNotContains(resposta, ausente)
+
+    def test_refazer_so_aparece_sem_nota_lancada(self):
+        self.client.post(self.url, {'disciplina': self.matematica.id, 'modo': 'ponderada'})
+        resposta = self.client.get(self.url)
+        self.assertTrue(resposta.context['pode_refazer'])
+        self.assertContains(resposta, 'id="btn-refazer-configuracao"')
+
+        NotaAvaliacao.objects.create(nota=self._nota(self.matematica), avaliacao=self.prova, nota_obtida=8.0)
+        resposta = self.client.get(self.url)
+        self.assertFalse(resposta.context['pode_refazer'])
+        self.assertNotContains(resposta, 'id="btn-refazer-configuracao"')
+
+    def test_salvar_em_disciplina_configurada_e_recusado(self):
+        for envio in (
+            {'novas': [('Prova 2', 'prova', '10')]},
+            {f'valor_{self.prova.id}': '50', f'valor_{self.trabalho.id}': '50'},
+            {f'nome_{self.prova.id}': 'Outro nome'},
+        ):
+            resposta = self._salvar(self.matematica, **envio)
+            self.assertEqual((resposta['ok'], resposta['erro']),
+                             (False, 'Essa disciplina já foi configurada para o ano letivo. A configuração não pode ser alterada.'))
+        self.assertEqual(self._pesos_da_matematica(), [('Prova', 'prova', 60.0), ('Trabalho', 'trabalho', 40.0)])
+
+    def test_mais_de_dez_avaliacoes_nao_grava_nada(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'aritmetica'})
+        resposta = self._salvar(self.educacao_fisica, novas=[(f'Prova {n}', 'prova', '') for n in range(11)])
+        self.assertEqual((resposta['ok'], resposta['erro']), (False, 'Cada disciplina pode ter no máximo 10 avaliações.'))
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+        resposta = self._salvar(self.educacao_fisica, novas=[(f'Prova {n}', 'prova', '') for n in range(10)])
+        self.assertTrue(resposta['ok'])
+        self.assertEqual(self.educacao_fisica.avaliacao_set.count(), 10)
+
+    def test_linha_nova_invalida_nao_grava_nada(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'soma'})
+        for linha, erro in (
+            (('', 'prova', '10'), 'Informe o nome da avaliação.'),
+            (('Prova', 'prova', 'abc'), 'Valor inválido.'),
+            (('Prova', 'prova', '-1'), 'O valor da avaliação deve ser um número de 0 para cima.'),
+            (('Prova', 'prova', 'nan'), 'O valor da avaliação deve ser um número de 0 para cima.'),
+            (('Prova', 'outro', '10'), 'Tipo inválido.'),
+            (('x' * 51, 'prova', '10'), 'O nome da avaliação pode ter até 50 caracteres.'),
+        ):
+            resposta = self._salvar(self.educacao_fisica, novas=[linha])
+            self.assertEqual((resposta['ok'], resposta['erro']), (False, erro))
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+    def test_na_aritmetica_a_tela_nao_tem_a_coluna_do_valor(self):
+        # O valor não entra na conta da média aritmética: a tabela não mostra essa coluna.
+        self.client.post(self.url, {'disciplina': self.historia.id, 'modo': 'aritmetica'})
+        resposta = self.client.get(self.url)
+        self.assertContains(resposta, '<td>Prova</td>', html=True)
+        self.assertNotContains(resposta, '<th>Valor</th>', html=True)
+        self.assertNotContains(resposta, '<td class="editavel-avaliacao" data-campo="valor">')
 
     def test_salvar_grava_as_novas_e_o_modo_da_primeira_configuracao(self):
         self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'soma'})
@@ -551,6 +613,136 @@ class SalvarAvaliacoesTests(DadosDasTelas):
             [('Prova 1', 'prova', 6.0), ('Trabalho', 'trabalho', 4.0)],
         )
         self.assertContains(self.client.get(self.url), 'Avaliações salvas com sucesso!')
+
+    def test_tela_recebe_os_limites_do_modo(self):
+        self.client.post(self.url, {'disciplina': self.portugues.id, 'modo': 'soma'})
+        resposta = self.client.get(self.url)
+        self.assertEqual((resposta.context['limite_dos_pesos'], resposta.context['maximo_avaliacoes']), (10, 10))
+        self.assertContains(resposta, "var LIMITE_DOS_PESOS = parseFloat('10');")
+
+        self.client.post(self.url, {'disciplina': self.historia.id, 'modo': 'aritmetica'})
+        resposta = self.client.get(self.url)
+        self.assertIsNone(resposta.context['limite_dos_pesos'])
+        self.assertContains(resposta, "var LIMITE_DOS_PESOS = parseFloat('');")
+
+    def test_ponderada_so_salva_com_os_pesos_fechando_100(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'ponderada'})
+        resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '60'), ('Trabalho', 'trabalho', '30')])
+        self.assertEqual((resposta['ok'], resposta['erro']),
+                         (False, 'Na média ponderada os pesos precisam fechar 100%. Hoje somam 90%.'))
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+        resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '60'), ('Trabalho', 'trabalho', '40')])
+        self.assertTrue(resposta['ok'])
+        self.assertEqual(self.educacao_fisica.avaliacao_set.count(), 2)
+
+    def test_ponderada_aceita_qualquer_divisao_inteira_que_feche_100(self):
+        # Quanto cada avaliação vale é decisão do professor, desde que os pesos fechem 100%.
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'ponderada'})
+        self.assertTrue(self._salvar(self.educacao_fisica, novas=[
+            ('P1', 'prova', '37'), ('P2', 'prova', '23'), ('T1', 'trabalho', '33'), ('A1', 'atividade_aula', '7'),
+        ])['ok'])
+        self.assertEqual(sum(self.educacao_fisica.avaliacao_set.values_list('valor', flat=True)), 100)
+
+    def test_ponderada_recusa_peso_quebrado_ou_zero(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'ponderada'})
+        for pesos in (('60', '39,5', '0,5'), ('100', '0')):
+            novas = [(f'Avaliação {n}', 'prova', peso) for n, peso in enumerate(pesos)]
+            resposta = self._salvar(self.educacao_fisica, novas=novas)
+            self.assertEqual((resposta['ok'], resposta['erro']),
+                             (False, 'Na média ponderada o peso de cada avaliação é uma porcentagem inteira, a partir de 1% (por exemplo, 20%).'), pesos)
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+    def test_peso_em_branco_nao_salva_na_soma_nem_na_ponderada(self):
+        for modo in ('soma', 'ponderada'):
+            self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': modo})
+            resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '')])
+            self.assertEqual((resposta['ok'], resposta['erro']), (False, 'Informe o peso de todas as avaliações.'), modo)
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+    def test_soma_so_salva_com_os_pesos_fechando_10(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'soma'})
+        resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '5'), ('Trabalho', 'trabalho', '3')])
+        self.assertEqual((resposta['ok'], resposta['erro']),
+                         (False, 'Na soma dos pesos os pesos precisam fechar 10 pontos. Hoje somam 8.'))
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+
+        resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '5'), ('T1', 'trabalho', '3'), ('T2', 'trabalho', '2')])
+        self.assertTrue(resposta['ok'])
+        self.assertEqual(self.educacao_fisica.avaliacao_set.count(), 3)
+
+    def test_na_aritmetica_o_peso_pode_ficar_em_branco(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'aritmetica'})
+        self.assertTrue(self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '')])['ok'])
+
+    def test_na_aritmetica_o_valor_de_cada_avaliacao_vai_de_0_a_10(self):
+        self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'aritmetica'})
+        resposta = self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '10'), ('Trabalho', 'trabalho', '11')])
+        self.assertEqual((resposta['ok'], resposta['erro']),
+                         (False, 'Na média aritmética o valor de cada avaliação vai de 0 a 10.'))
+        self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
+        # Cada uma até 10, sem limite na soma: duas avaliações de 10 entram.
+        self.assertTrue(self._salvar(self.educacao_fisica, novas=[('Prova', 'prova', '10'), ('Trabalho', 'trabalho', '10')])['ok'])
+
+    def test_cadastro_de_notas_nao_abre_com_a_configuracao_incompleta(self):
+        # Matemática é ponderada com 60 + 40: sem o trabalho, os pesos somam 60.
+        self.trabalho.delete()
+        turma = self.matriculas['Matemática'].turma
+        self.client.post(reverse('cadastrar-notas'), {
+            'acao': 'selecionar_turma', 'disciplina': self.matematica.id, 'turma': turma.id,
+        })
+        resposta = self.client.get(reverse('cadastrar-notas'))
+        self.assertContains(resposta, 'A configuração das avaliações dessa disciplina está incompleta.')
+        self.assertContains(resposta, 'Hoje somam 60%.')
+        self.assertNotContains(resposta, 'id="TabelaNotas"')
+
+    def test_excluir_da_lista_diz_que_apaga_as_notas_e_nao_o_aluno(self):
+        self._nota(self.matematica)
+        turma = self.matriculas['Matemática'].turma
+        self.client.post(reverse('lista-notas'), {'disciplina': self.matematica.id, 'turma': turma.id})
+        resposta = self.client.get(reverse('lista-notas'))
+        self.assertContains(resposta, 'data-nome="todas as notas de Ana em Matemática"')
+        self.assertContains(resposta, 'title="Excluir todas as notas desse aluno na disciplina"')
+
+    def test_nota_com_mais_de_duas_casas_nao_entra(self):
+        def lancar(valor):
+            return self.client.post(reverse('editar-nota-avaliacao-ajax'), {
+                'aluno': self.aluna.id, 'turma': self.matriculas['Matemática'].turma.id,
+                'avaliacao': self.prova.id, 'valor': valor, 'so_lancar': '1',
+            }).json()
+
+        for valor in ('1,2222222', '8.125'):
+            resposta = lancar(valor)
+            self.assertEqual((resposta['ok'], resposta['erro']), (False, 'A nota pode ter no máximo 2 casas depois da vírgula.'), valor)
+        self.assertFalse(NotaAvaliacao.objects.exists())
+        # Duas casas entram, e zero sobrando não conta como casa.
+        self.assertTrue(lancar('8,750')['ok'])
+        self.assertEqual(NotaAvaliacao.objects.get().nota_obtida, 8.75)
+
+    def test_formulario_de_edicao_mostra_a_nota_sem_zero_sobrando(self):
+        nota = self._nota(self.matematica)
+        NotaAvaliacao.objects.create(nota=nota, avaliacao=self.prova, nota_obtida=1.9)
+        NotaAvaliacao.objects.create(nota=nota, avaliacao=self.trabalho, nota_obtida=8.0)
+        resposta = self.client.get(reverse('editar-nota', args=[nota.id]))
+        self.assertEqual([item['valor_texto'] for item in resposta.context['avaliacoes_com_nota']], ['1.9', '8'])
+        self.assertContains(resposta, 'value="1.9"')
+
+    def test_formulario_de_edicao_recusa_mais_de_duas_casas(self):
+        nota = self._nota(self.matematica)
+        NotaAvaliacao.objects.create(nota=nota, avaliacao=self.prova, nota_obtida=5.0)
+        resposta = self.client.post(reverse('editar-nota', args=[nota.id]), {f'nota_avaliacao_{self.prova.id}': '1.2222222'})
+        self.assertContains(resposta, 'A nota pode ter no máximo 2 casas depois da vírgula.')
+        self.assertEqual(NotaAvaliacao.objects.get().nota_obtida, 5.0)
+
+    def test_nota_nao_entra_com_avaliacao_sem_peso(self):
+        Avaliacao.objects.filter(id=self.trabalho.id).update(valor=None)
+        resposta = self.client.post(reverse('editar-nota-avaliacao-ajax'), {
+            'aluno': self.aluna.id, 'turma': self.matriculas['Matemática'].turma.id,
+            'avaliacao': self.prova.id, 'valor': '8', 'so_lancar': '1',
+        }).json()
+        self.assertFalse(resposta['ok'])
+        self.assertIn('Há avaliação sem peso nessa disciplina', resposta['erro'])
+        self.assertFalse(NotaAvaliacao.objects.exists())
 
     def test_acima_do_limite_nao_grava_nada(self):
         self.client.post(self.url, {'disciplina': self.educacao_fisica.id, 'modo': 'soma'})
@@ -564,63 +756,6 @@ class SalvarAvaliacoesTests(DadosDasTelas):
         resposta = self._salvar(self.educacao_fisica, novas=[('Prova 1', 'prova', '10')])
         self.assertFalse(resposta['ok'])
         self.assertFalse(self.educacao_fisica.avaliacao_set.exists())
-
-    def test_trocar_os_pesos_de_lugar_e_aceito(self):
-        # Gravando uma de cada vez, 40 para 60 antes de 60 para 40 passaria de 100 no meio do caminho.
-        resposta = self._salvar(self.matematica, **{
-            f'valor_{self.trabalho.id}': '60', f'valor_{self.prova.id}': '40',
-        })
-        self.assertTrue(resposta['ok'])
-        self.assertEqual(self._pesos_da_matematica(), [('Prova', 'prova', 40.0), ('Trabalho', 'trabalho', 60.0)])
-
-    def test_nova_avaliacao_conta_no_limite_junto_com_as_gravadas(self):
-        resposta = self._salvar(self.matematica, novas=[('Prova 2', 'prova', '10')])
-        self.assertFalse(resposta['ok'])
-        self.assertIn('Ficaria em 110', resposta['erro'])
-        self.assertEqual(Avaliacao.objects.filter(disciplina=self.matematica).count(), 2)
-
-    def test_mudar_o_peso_recalcula_a_mf_e_mantem_o_exame(self):
-        nota = self._nota(self.matematica, situacao='aprovado', media_final=5.2, nota_exame=8.0)
-        NotaAvaliacao.objects.create(nota=nota, avaliacao=self.prova, nota_obtida=4)
-        NotaAvaliacao.objects.create(nota=nota, avaliacao=self.trabalho, nota_obtida=7)
-        self._salvar(self.matematica, **{f'valor_{self.prova.id}': '40', f'valor_{self.trabalho.id}': '60'})
-        nota.refresh_from_db()
-        # 4 x 40% + 7 x 60% = 5,8; com o exame 8, (5,8 + 8) / 2 = 6,9
-        self.assertEqual((nota.media_final, nota.nota_exame, nota.situacao), (5.8, 8.0, 'aprovado'))
-
-    def test_salvar_sem_mudar_o_peso_nao_recalcula(self):
-        with mock.patch('aluno.views._recalcular_notas_da_disciplina') as recalcular:
-            resposta = self._salvar(self.matematica, **{
-                f'nome_{self.prova.id}': 'Prova final', f'tipo_{self.prova.id}': 'trabalho',
-                f'valor_{self.prova.id}': '60,0', f'valor_{self.trabalho.id}': '40',
-            })
-        self.assertTrue(resposta['ok'])
-        recalcular.assert_not_called()
-        self.assertEqual(self._pesos_da_matematica(), [('Prova final', 'trabalho', 60.0), ('Trabalho', 'trabalho', 40.0)])
-
-    def test_campo_que_nao_veio_no_envio_fica_como_esta(self):
-        self.assertTrue(self._salvar(self.matematica, **{f'nome_{self.trabalho.id}': 'Seminário'})['ok'])
-        self.assertEqual(self._pesos_da_matematica(), [('Prova', 'prova', 60.0), ('Seminário', 'trabalho', 40.0)])
-
-    def test_valor_recusado_nao_grava_nada(self):
-        for campos, erro in (
-            ({f'nome_{self.prova.id}': ' '}, 'Informe o nome da avaliação.'),
-            ({f'valor_{self.prova.id}': 'abc'}, 'Valor inválido.'),
-            ({f'valor_{self.prova.id}': '-1'}, 'O valor da avaliação deve ser um número de 0 para cima.'),
-            ({f'valor_{self.prova.id}': 'nan'}, 'O valor da avaliação deve ser um número de 0 para cima.'),
-            ({f'tipo_{self.prova.id}': 'outro'}, 'Tipo inválido.'),
-            ({f'nome_{self.prova.id}': 'x' * 51}, 'O nome da avaliação pode ter até 50 caracteres.'),
-        ):
-            # Uma mudança válida junto com a recusada também não é gravada
-            campos[f'nome_{self.trabalho.id}'] = 'Seminário'
-            resposta = self._salvar(self.matematica, **campos)
-            self.assertEqual((resposta['ok'], resposta['erro']), (False, erro))
-            self.assertEqual(self._pesos_da_matematica(), [('Prova', 'prova', 60.0), ('Trabalho', 'trabalho', 40.0)])
-
-    def test_linha_nova_sem_nome_e_recusada(self):
-        resposta = self._salvar(self.historia, novas=[('', 'prova', '')])
-        self.assertEqual((resposta['ok'], resposta['erro']), (False, 'Informe o nome da avaliação.'))
-        self.assertEqual(self.historia.avaliacao_set.count(), 1)
 
     def test_so_o_professor_salva(self):
         self.client.logout()
