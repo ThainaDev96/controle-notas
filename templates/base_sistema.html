@@ -286,10 +286,10 @@
                             {% if request.user.groups.all.0.name == 'professor' %}
                             <div class="pcoded-navigatio-lavel">Notas</div>
                             <ul class="pcoded-item pcoded-left-item">
-                                <li class="{% block nav_diario_classe %}{% endblock %}">
-                                    <a href="{% url 'diario-classe' %}?limpar=1">
-                                        <span class="pcoded-micon"><i class="feather icon-calendar"></i></span>
-                                        <span class="pcoded-mtext">Diário de classe</span>
+                                <li class="{% block nav_painel %}{% endblock %}">
+                                    <a href="{% url 'professor-dashboard' %}">
+                                        <span class="pcoded-micon"><i class="feather icon-home"></i></span>
+                                        <span class="pcoded-mtext">Painel</span>
                                     </a>
                                 </li>
                                 <li class="pcoded-hasmenu {% block nav_notas_menu %}{% endblock %}">
@@ -322,12 +322,6 @@
                             {% if request.user.groups.all.0.name == 'aluno' %}
                             <div class="pcoded-navigatio-lavel">Minhas notas</div>
                             <ul class="pcoded-item pcoded-left-item">
-                                <li class="{% block nav_grade_horario %}{% endblock %}">
-                                    <a href="{% url 'grade-horario' %}">
-                                        <span class="pcoded-micon"><i class="feather icon-calendar"></i></span>
-                                        <span class="pcoded-mtext">Grade de horário</span>
-                                    </a>
-                                </li>
                                 <li class="{% block nav_minhas_notas %}{% endblock %}">
                                     <a href="{% url 'minhas-notas' %}?limpar=1">
                                         <span class="pcoded-micon"><i class="ti-book"></i></span>

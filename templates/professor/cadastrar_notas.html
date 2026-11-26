@@ -185,7 +185,6 @@
                                 <div class="col-sm-10">
                                     <input type="text" class="form-control" id="situacao"
                                         data-exame="{{ nota.nota_exame|default_if_none:'' }}"
-                                        data-por-falta="{% if situacao_texto == 'Reprovado por falta' %}1{% endif %}"
                                         value="{{ situacao_texto }}"
                                         placeholder="Definida automaticamente" readonly
                                         style="background-color: #f4f7fa;">
@@ -313,8 +312,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const situacaoGravada = situacaoInput.defaultValue;
     // O exame lançado continua valendo quando uma nota muda, como no salvar.
     const exameGravado = parseFloat(situacaoInput.dataset.exame);
-    // Reprovado por falta continua reprovado, qualquer que seja a nota corrigida.
-    const porFalta = situacaoInput.dataset.porFalta === '1';
 
     // Igual ao round() do Python: no empate exato (ex.: 8.125) fica o número par, não o maior.
     function arredondar(valor) {
@@ -368,9 +365,7 @@ document.addEventListener("DOMContentLoaded", function () {
             mediaInput.value = media.toFixed(2);
 
             // Quem já fez o exame não volta para a situação das notas: vale o resultado do exame, como no calcular_pos_exame.
-            if (porFalta) {
-                situacaoInput.value = situacaoGravada;
-            } else if (!isNaN(exameGravado)) {
+            if (!isNaN(exameGravado)) {
                 situacaoInput.value = arredondar((media + exameGravado) / 2) >= 6.0 ? 'Aprovado' : 'Reprovado';
             } else if (media >= 7.0) {
                 situacaoInput.value = 'Aprovado';
@@ -381,7 +376,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         } else {
             mediaInput.value = '';
-            situacaoInput.value = porFalta ? situacaoGravada : 'Cursando';
+            situacaoInput.value = 'Cursando';
         }
     }
 

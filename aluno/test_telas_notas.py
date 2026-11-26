@@ -183,7 +183,6 @@ class PdfDoBoletimTests(DadosDasTelas):
         self.assertTrue(any('8,0 × 100,0%' in texto for texto in textos), textos)
         self.assertIn('Regra de aprovação', textos)
         self.assertIn('Nota final a partir de 7,0: Aprovado', textos)
-        self.assertTrue(any('Frequência abaixo de 75% na disciplina' in texto for texto in textos), textos)
         # A tela do boletim não mostra mais nenhum dos dois.
         resposta = self.client.get(reverse('minhas-notas'))
         self.assertNotContains(resposta, 'Resumo do cálculo')
@@ -781,7 +780,7 @@ class MenuAbreAsTelasSemFiltroTests(DadosDasTelas):
     def test_menu_do_professor_abre_as_telas_sem_filtro(self):
         self.client.force_login(self.professor)
         resposta = self.client.get(reverse('cadastrar-notas'))
-        for nome in ('diario-classe', 'lista-notas', 'cadastrar-notas', 'configurar-avaliacoes'):
+        for nome in ('lista-notas', 'cadastrar-notas', 'configurar-avaliacoes'):
             self.assertContains(resposta, f'href="{reverse(nome)}?limpar=1"')
 
     def test_menu_do_aluno_abre_o_boletim_sem_filtro(self):

@@ -15,7 +15,10 @@ from django.urls import reverse
 
 from aluno.calculo_notas import calcular_nota_final, calcular_pos_exame, classificar
 from aluno.management.commands.popular_dados import SENHA_TESTE
-from aluno.models import Disciplina, Turma, Matricula, Nota, Avaliacao, NotaAvaliacao, Aula
+from aluno.models import Disciplina, Turma, Matricula, Nota, Avaliacao, NotaAvaliacao
+
+# Um professor por disciplina.
+PROFESSORES = ('carlos.souza', 'ana.oliveira', 'roberto.lima', 'lucia.martins', 'paulo.mendes', 'juliana.costa', 'fernanda.rocha', 'marcos.alves')
 
 CSV_ALUNOS = "/app/aluno/arquivos/alunos_exemplo.csv"
 
@@ -120,6 +123,7 @@ class DistribuicaoTests(TestCase):
             turmas_por_aluno.setdefault(aluno_id, set()).add(turma)
         self.assertEqual(len(turmas_por_aluno), 40)
         self.assertEqual({len(turmas) for turmas in turmas_por_aluno.values()}, {1})
+
 
     def test_modo_de_calculo_de_cada_disciplina(self):
         self.assertEqual(dict(Disciplina.objects.values_list('nome', 'modo_calculo')), MODOS)
@@ -230,8 +234,14 @@ class DistribuicaoTests(TestCase):
         linha = next(l for l in self.saida.splitlines() if l.startswith("Sem turma"))
         self.assertEqual(set(re.findall(r"\b\d{6,}\b", linha)), set(sem_turma.values_list('username', flat=True)))
 
+    def test_cada_disciplina_tem_o_proprio_professor(self):
+        from collections import Counter
+        professores = Counter(Disciplina.objects.values_list('professor__username', flat=True))
+        self.assertEqual(set(professores), set(PROFESSORES))
+        self.assertEqual(set(professores.values()), {1})
+
     def test_professor_criado_fica_no_grupo_e_entra_com_a_senha_de_teste(self):
-        for username in ('carlos.souza', 'ana.oliveira', 'roberto.lima'):
+        for username in PROFESSORES:
             self.assertTrue(User.objects.filter(username=username, groups__name='professor').exists(), username)
             self.assertTrue(self.client.login(username=username, password=SENHA_TESTE), username)
 
@@ -342,9 +352,7 @@ class ExcessoTests(TestCase):
         self.maria = User.objects.create(username='maria.oliveira', password='senha-sem-hash')
         self.maria.groups.add(grupo_professor)
 
-        self.geografia = Disciplina.objects.create(
-            nome='Geografia', professor=self.testeprofessor, modo_calculo='soma', total_periodos=72
-        )
+        self.geografia = Disciplina.objects.create(nome='Geografia', professor=self.testeprofessor, modo_calculo='soma')
         Avaliacao.objects.create(nome='p1', tipo='prova', valor=10, disciplina=self.geografia)
         self.portugues = Disciplina.objects.create(nome='Português', professor=self.maria, modo_calculo='soma')
         self.matematica = Disciplina.objects.create(
@@ -358,7 +366,6 @@ class ExcessoTests(TestCase):
         self.turma_antiga = Turma.objects.create(nome='1A', disciplina=self.geografia, ano=self.ano - 1)
         self.turma_antiga_matematica = Turma.objects.create(nome='3A', disciplina=self.matematica, ano=self.ano - 1)
         self.turma_fora_da_lista = Turma.objects.create(nome='1A', disciplina=self.geopolitica, ano=self.ano)
-        self.aula = Aula.objects.create(turma=self.turma_com_aula, data='2026-10-25')
 
         # O mesmo aluno em duas turmas, como ficou depois de rodar o script antigo mais de uma vez.
         for turma in (self.turma_inativa, self.turma_de_teste, self.turma_com_aula, self.turma_antiga):
@@ -407,15 +414,14 @@ class ExcessoTests(TestCase):
         self.portugues.refresh_from_db()
         self.assertTrue(self.portugues.ativo)
 
-    def test_disciplina_repetida_usa_a_ativa_e_mantem_as_aulas_dela(self):
+    def test_disciplina_repetida_usa_a_ativa(self):
         Disciplina.objects.create(nome='Física', professor=self.testeprofessor, ativo=False)
         fisica = Disciplina.objects.create(nome='Física', professor=self.maria, modo_calculo='soma')
         turma = Turma.objects.create(nome='3A', disciplina=fisica, ano=self.ano)
-        aula = Aula.objects.create(turma=turma, data='2026-10-25')
         popular()
         fisica.refresh_from_db()
         self.assertEqual(fisica.modo_calculo, 'ponderada')
-        self.assertTrue(Aula.objects.filter(id=aula.id).exists())
+        self.assertTrue(Turma.objects.filter(id=turma.id, ativo=True).exists())
 
     def test_aluno_que_ja_existia_entra_com_a_senha_de_teste(self):
         popular()
@@ -465,11 +471,10 @@ class ExcessoTests(TestCase):
         self.portugues.refresh_from_db()
         self.assertEqual(self.portugues.professor, self.maria)
 
-    def test_geografia_vira_aritmetica_e_mantem_os_periodos(self):
+    def test_geografia_vira_aritmetica(self):
         popular()
         self.geografia.refresh_from_db()
         self.assertEqual(self.geografia.modo_calculo, 'aritmetica')
-        self.assertEqual(self.geografia.total_periodos, 72)
         self.assertEqual(
             list(self.geografia.avaliacao_set.order_by('id').values_list('nome', 'valor')),
             [('Prova 1', None), ('Prova 2', None), ('Trabalho 1', None), ('Atividade 1', None)],
@@ -481,9 +486,6 @@ class ExcessoTests(TestCase):
         self.assertFalse(self.geopolitica.ativo)
         self.assertFalse(self.geopolitica.turma_set.exists())
 
-    def test_aula_da_turma_que_fica_nao_e_apagada(self):
-        popular()
-        self.assertTrue(Aula.objects.filter(id=self.aula.id, turma=self.turma_com_aula).exists())
 
     def test_turma_de_ano_anterior_fica_com_os_alunos_do_mesmo_nome_e_tudo_lancado(self):
         popular()
@@ -536,7 +538,7 @@ class ForaDoBancoLocalTests(TestCase):
         self.assertEqual(Matricula.objects.values('aluno_id').distinct().count(), 40)
         aluno = Matricula.objects.first().aluno
         self.assertFalse(self.client.login(username=aluno.username, password=SENHA_TESTE))
-        for username in ('carlos.souza', 'ana.oliveira', 'roberto.lima'):
+        for username in PROFESSORES:
             self.assertFalse(self.client.login(username=username, password=SENHA_TESTE), username)
 
     def test_com_disciplina_e_sem_turma_para_sem_alterar_nada(self):

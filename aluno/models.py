@@ -14,8 +14,6 @@ class Disciplina(models.Model):
         ("ponderada", "Média ponderada"),
         ("aritmetica", "Média aritmética"),
     ], verbose_name="Modo de cálculo")
-    # Total de períodos da disciplina inteira (ex.: 72). É a base da frequência do diário de classe.
-    total_periodos = models.PositiveIntegerField(null=True, blank=True, verbose_name="Total de períodos")
 
     def __str__(self):
         return self.nome
@@ -107,30 +105,3 @@ class NotaAvaliacao(models.Model):
 
     class Meta:
         unique_together = ('nota', 'avaliacao')
-
-
-class Aula(models.Model):
-    # Uma aula por turma e data. A disciplina vem de turma.disciplina.
-    turma = models.ForeignKey(Turma, on_delete=models.CASCADE, verbose_name="Turma")
-    data = models.DateField(verbose_name="Data")
-    realizada = models.BooleanField(default=False, verbose_name="Aula realizada")
-    periodos = models.PositiveSmallIntegerField(default=4, verbose_name="Períodos")
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['turma', 'data'], name='aula_unica_por_turma_data'),
-        ]
-
-
-class Falta(models.Model):
-    # Só as faltas ficam gravadas: sem registro, o aluno está presente naquele período.
-    # A falta justificada é uma Falta com justificada=True e conta na frequência como as outras.
-    aula = models.ForeignKey(Aula, on_delete=models.CASCADE, verbose_name="Aula")
-    matricula = models.ForeignKey(Matricula, on_delete=models.CASCADE, verbose_name="Matrícula")
-    periodo = models.PositiveSmallIntegerField(verbose_name="Período")
-    justificada = models.BooleanField(default=False, verbose_name="Falta justificada")
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['aula', 'matricula', 'periodo'], name='falta_unica_por_aula_matricula_periodo'),
-        ]

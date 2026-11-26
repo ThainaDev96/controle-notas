@@ -43,9 +43,6 @@ ALUNOS_POR_TURMA = 8
 # Alunos cadastrados e sem matrícula nenhuma, para testar o cadastro de matrícula pela tela.
 ALUNOS_SEM_TURMA = 10
 
-# Total de períodos da disciplina sem esse número: é obrigatório no cadastro e é a base da frequência.
-TOTAL_PERIODOS = 72
-
 SEM_NOTA, PARCIAL, TUDO = "sem_nota", "parcial", "tudo"
 
 # O modo de cálculo é da disciplina, então a situação é por turma e modo. Cada
@@ -144,6 +141,19 @@ CONFIG_AVALIACOES = {
 }
 
 
+def _professor(username, nome, sobrenome, disciplinas):
+    """Um professor e as disciplinas dele (nome -> modo de cálculo), no formato que o comando usa."""
+    return {
+        "professor": {
+            "username": username,
+            "first_name": nome,
+            "last_name": sobrenome,
+            "email": f"{username}@dombosco.com",
+        },
+        "disciplinas": disciplinas,
+    }
+
+
 class Command(BaseCommand):
     help = "Popula o banco com dados de teste: 5 turmas de 8 alunos, com as situações de notas divididas por turma"
 
@@ -222,36 +232,20 @@ class Command(BaseCommand):
         # Educação física fica de propósito com modo_calculo=None: é a disciplina
         # "não configurada" pra você testar a tela zerada, sem nenhuma
         # avaliação/nota nela.
+        # Um professor por disciplina, como numa escola de verdade. Com 5 turmas no mesmo turno, um professor
+        # tem 25 horários por semana, e cada disciplina pede de 10 a 20 períodos por semana (as turmas somadas):
+        # com mais de uma disciplina por professor a carga passaria dos 25.
+        # Educação física e Artes ficam de propósito sem configuração: são as disciplinas para configurar à
+        # mão (o modo de cálculo e as avaliações) em testes e apresentações.
         professores_disciplinas = [
-            {
-                "professor": {
-                    "username": "carlos.souza",
-                    "first_name": "Carlos",
-                    "last_name": "Souza",
-                    "email": "carlos.souza@dombosco.com",
-                },
-                # Educação física e Artes ficam de propósito sem configuração: são as disciplinas para
-                # configurar à mão (o modo de cálculo e as avaliações) em testes e apresentações.
-                "disciplinas": {"Matemática": "ponderada", "Física": "ponderada", "Educação física": None, "Artes": None},
-            },
-            {
-                "professor": {
-                    "username": "ana.oliveira",
-                    "first_name": "Ana",
-                    "last_name": "Oliveira",
-                    "email": "ana.oliveira@dombosco.com",
-                },
-                "disciplinas": {"Português": "soma", "Literatura": "soma"},
-            },
-            {
-                "professor": {
-                    "username": "roberto.lima",
-                    "first_name": "Roberto",
-                    "last_name": "Lima",
-                    "email": "roberto.lima@dombosco.com",
-                },
-                "disciplinas": {"História": "aritmetica", "Geografia": "aritmetica"},
-            },
+            _professor("carlos.souza", "Carlos", "Souza", {"Matemática": "ponderada"}),
+            _professor("ana.oliveira", "Ana", "Oliveira", {"Português": "soma"}),
+            _professor("roberto.lima", "Roberto", "Lima", {"Geografia": "aritmetica"}),
+            _professor("lucia.martins", "Lúcia", "Martins", {"História": "aritmetica"}),
+            _professor("paulo.mendes", "Paulo", "Mendes", {"Física": "ponderada"}),
+            _professor("juliana.costa", "Juliana", "Costa", {"Literatura": "soma"}),
+            _professor("fernanda.rocha", "Fernanda", "Rocha", {"Artes": None}),
+            _professor("marcos.alves", "Marcos", "Alves", {"Educação física": None}),
         ]
 
         self.disciplinas = []
@@ -274,9 +268,6 @@ class Command(BaseCommand):
                     disciplina = Disciplina(nome=nome, professor=professor)
                 disciplina.modo_calculo = modo
                 disciplina.ativo = True
-                # Quem já tem o total informado pela tela continua com ele.
-                if not disciplina.total_periodos:
-                    disciplina.total_periodos = TOTAL_PERIODOS
                 disciplina.save()
                 self.disciplinas.append(disciplina)
 
